@@ -1,0 +1,58 @@
+# Unity-generated files (keep all source assets and their .meta files).
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Bb]uild/
+/[Bb]uilds/
+/.utmp/
+/MemoryCaptures/
+/Recordings/
+/Assets/_Recovery/
+/Assets/_Recovery.meta
+mono_crash.*
+sysinfo.txt
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+/.vs/
+/.idea/
+.DS_Store
+
+# Build artifacts stay outside source history; checkpoints record APK hashes.
+*.apk
+*.aab
+
+# Local tools, Blender autosaves, and credentials.
+__pycache__/
+*.pyc
+*.blend[0-9]*
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+/Assets/Resources/DevAgentSettings.asset
+/Assets/Resources/DevAgentSettings.asset.meta
+
+# Reproducible library import staging; retain the original archive and authored blends.
+ArtSource/FreeLibraries/KayKitAdventurers/original/
+ArtSource/FreeLibraries/KayKitAdventurers/UnityReady/
+
+# Apple builds and local signing
+/Exports/
+/DerivedData/
+*.ipa
+*.xcarchive/
+*.mobileprovision
+*.cer
+*.p8
+xcuserdata/
+*.xcuserstate

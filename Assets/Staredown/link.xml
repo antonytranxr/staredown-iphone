@@ -1,0 +1,28 @@
+<linker>
+  <!-- CreatePrimitive selects these native components dynamically. Keep their
+       managed types available in stripped IL2CPP headset builds. -->
+  <assembly fullname="UnityEngine.CoreModule">
+    <type fullname="UnityEngine.MeshFilter" preserve="all" />
+    <type fullname="UnityEngine.MeshRenderer" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.BoxCollider" preserve="all" />
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
+    <type fullname="UnityEngine.MeshCollider" preserve="all" />
+  </assembly>
+<assembly fullname="Assembly-CSharp">
+  <type fullname="Staredown.WireMessage" preserve="fields" />
+  <type fullname="Staredown.ArenaState" preserve="fields" />
+  <type fullname="Staredown.Fighter" preserve="fields" />
+  <type fullname="Staredown.Pairing" preserve="fields" />
+  <type fullname="Staredown.Toss" preserve="fields" />
+  <type fullname="Staredown.StarePresenceFrame" preserve="fields" />
+  <type fullname="Staredown.StareHandPose" preserve="fields" />
+  <type fullname="Staredown.StareMobileCamera/Sample" preserve="fields" />
+  <type fullname="Staredown.StareAvatarMaterials" preserve="fields" />
+  <type fullname="Staredown.StareAvatarMaterial" preserve="fields" />
+  <type fullname="Staredown.StareProgression/Wallet" preserve="fields" />
+</assembly>
+
+</linker>

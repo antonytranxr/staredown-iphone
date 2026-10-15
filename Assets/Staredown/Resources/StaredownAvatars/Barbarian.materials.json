@@ -1,0 +1,22 @@
+{
+  "materials": [
+    {
+      "name": "barbarian_texture",
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "metallic": 0.03,
+      "roughness": 0.65,
+      "emissionStrength": 0,
+      "albedoTexture": "StaredownAvatars/Textures/barbarian_texture"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+using System;
+using System.Linq;
+using UnityEngine;
+public static class StareCelebrationChecks
+{
+// Run in Play mode with desktop XR disabled. Render output is optional review evidence.
+public static string Verify(string outputDirectory)
+{
+System.IO.Directory.CreateDirectory(outputDirectory);
+var game=UnityEngine.Object.FindFirstObjectByType<Staredown.StareGame>();var feedback=game.GetComponent<Staredown.StareFeedback>();var view=game.GetComponent<Staredown.StareVisuals>();var fixture=new GameObject("Celebration verification");var flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;bool gameEnabled=game.enabled,fxEnabled=feedback.enabled,mute=UnityEditor.EditorUtility.audioMasterMute;var oldState=game.State;int theme=view.CurrentArenaTheme;int checks=0;System.Action<bool,string> check=(ok,label)=>{if(!ok)throw new System.Exception(label);checks++;};game.enabled=false;feedback.enabled=false;UnityEditor.EditorUtility.audioMasterMute=true;
+var cameraObject=new GameObject("Effects review camera");cameraObject.transform.SetParent(fixture.transform,false);var cam=cameraObject.AddComponent<Camera>();cam.enabled=false;cam.stereoTargetEye=StereoTargetEyeMask.None;cam.clearFlags=CameraClearFlags.Skybox;cam.fieldOfView=65;cam.nearClipPlane=.05f;cam.farClipPlane=150;var rt=new RenderTexture(1600,1000,24);rt.Create();var tex=new Texture2D(1600,1000,TextureFormat.RGB24,false);var oldRT=RenderTexture.active;
+System.Action<string> render=path=>{cam.targetTexture=rt;cam.Render();RenderTexture.active=rt;tex.ReadPixels(new Rect(0,0,1600,1000),0,0);tex.Apply();System.IO.File.WriteAllBytes(path,tex.EncodeToPNG());};
+try{
+ var fireworks=fixture.AddComponent<Staredown.StareFireworks>();fireworks.Initialize(cam.transform,null);var state=new Staredown.ArenaState{phase=(int)Staredown.MatchPhase.Champion,winner=0,remaining=8};
+ int peak=0;for(int i=0;i<160;i++){state.remaining=8-i*.05f;fireworks.Observe(state);fireworks.Advance(.05f);peak=Mathf.Max(peak,fireworks.ActiveParticles);check(fireworks.ActiveParticles<=Staredown.StareFireworks.Capacity&&fireworks.ActiveRockets<=Staredown.StareFireworks.RocketCapacity,"Bounded fireworks frame "+i);}
+ check(fireworks.Launches==40&&fireworks.Bursts==40,"Complete staggered championship show");check(peak>650,"Celebration has multiple overlapping aerial shells");int launches=fireworks.Launches;fireworks.Observe(state);fireworks.Observe(state);check(fireworks.Launches==launches,"Repeated snapshot never repeats wave");state.phase=(int)Staredown.MatchPhase.Lobby;fireworks.Observe(state);check(fireworks.ActiveParticles==0&&fireworks.ActiveRockets==0,"Return to lobby clears fireworks");state.phase=(int)Staredown.MatchPhase.Champion;state.remaining=8;fireworks.Observe(state);check(fireworks.Launches==launches+2,"Rematch launches a fresh show");state.phase=(int)Staredown.MatchPhase.Countdown;fireworks.Observe(state);check(fireworks.ActiveParticles==0,"No fireworks during next countdown");
+ for(int i=0;i<40;i++){var p=Staredown.StareFireworks.LaunchPosition(i);check(new Vector2(p.x,p.z).magnitude>16,"Launches outside spectator walkway "+i);}
+ state.phase=(int)Staredown.MatchPhase.Champion;state.remaining=3.4f;int previousLaunches=fireworks.Launches;fireworks.Observe(state);check(fireworks.Launches==previousLaunches+2,"Late snapshot skips old waves");fireworks.Clear();state.phase=(int)Staredown.MatchPhase.Lobby;fireworks.Observe(state);
+ check(Resources.Load<AudioClip>("Audio/Effects/FireworkLaunch")!=null&&Resources.Load<AudioClip>("Audio/Effects/FireworkBurst")!=null,"Fireworks audio imported");
+ var t=new Staredown.Tournament();t.Add(0,"HOST");t.EnableBotFill();t.Input(0,0,0,true,true,0,0,0,true);t.SelectArena(2);t.Start();for(int i=0;i<60&&t.Phase!=Staredown.MatchPhase.Duel;i++){t.Input(0,0,0,true,true,0,0,0,true);t.Tick(.1f);}var before=t.Snapshot();view.SetArenaTheme(2);view.menu.gameObject.SetActive(false);view.characterMenu.gameObject.SetActive(false);view.UpdateState(before,-99,false);feedback.Observe(new Staredown.ArenaState(),-99,0,0,false,.05f);feedback.Observe(before,-99,0,0,false,.05f);int eliminations=feedback.EliminationBursts;
+ foreach(var pair in t.Pairs.ToArray())t.Blink(pair.b);t.Tick(.1f);var after=t.Snapshot();view.UpdateState(after,-99,false);feedback.Observe(after,-99,0,0,false,.05f);check(feedback.EliminationBursts==eliminations+8,"Eight simultaneous eliminations fire once");feedback.Observe(after,-99,0,0,false,.05f);check(feedback.EliminationBursts==eliminations+8,"Elimination snapshots are idempotent");
+ feedback.AdvanceEffects(.05f);check(feedback.ActiveParticles<=768&&feedback.ActiveParticles>450,"Simultaneous eliminations remain pooled");
+ for(int frame=0;frame<5;frame++)feedback.AdvanceEffects(.05f);cam.transform.position=new Vector3(0,4,-16);cam.transform.LookAt(new Vector3(0,1.2f,-3));render(System.IO.Path.Combine(outputDirectory,"Elimination-impact-review.png"));
+ feedback.Observe(new Staredown.ArenaState(),-99,0,0,false,.05f);state.phase=(int)Staredown.MatchPhase.Champion;state.remaining=8;
+ cam.transform.position=new Vector3(0,2,-10);cam.transform.LookAt(new Vector3(0,10,7));for(int i=0;i<72;i++){state.remaining=8-i*.05f;fireworks.Observe(state);fireworks.Advance(.05f);}cam.transform.position=new Vector3(0,2,-10);cam.transform.LookAt(new Vector3(0,10,7));render(System.IO.Path.Combine(outputDirectory,"Arena-fireworks-review.png"));
+ var watch=System.Diagnostics.Stopwatch.StartNew();for(int i=0;i<500;i++)fireworks.Advance(.001f);watch.Stop();return checks+" celebration checks passed; peak fireworks="+peak+"; desktop particle mesh update average="+(watch.Elapsed.TotalMilliseconds/500).ToString("F3")+"ms";
+}finally{feedback.Observe(new Staredown.ArenaState(),-99,0,0,false,.05f);view.SetArenaTheme(theme);view.UpdateState(oldState,game.LocalId,false);RenderTexture.active=oldRT;cam.targetTexture=null;rt.Release();UnityEngine.Object.Destroy(rt);UnityEngine.Object.Destroy(tex);UnityEngine.Object.Destroy(fixture);game.enabled=gameEnabled;feedback.enabled=fxEnabled;UnityEditor.EditorUtility.audioMasterMute=mute;}
+
+}
+}

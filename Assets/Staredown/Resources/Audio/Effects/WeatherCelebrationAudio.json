@@ -1,0 +1,24 @@
+{
+  "origin": "Original procedural synthesis; layered filtered noise, oscillators and delayed crackles",
+  "rate": 44100,
+  "clips": [
+    {
+      "name": "Thunder",
+      "duration": 4.2,
+      "peak": 0.78,
+      "rms": 0.1590453261284917
+    },
+    {
+      "name": "FireworkLaunch",
+      "duration": 0.95,
+      "peak": 0.78,
+      "rms": 0.22491420588610456
+    },
+    {
+      "name": "FireworkBurst",
+      "duration": 2.7999773242630384,
+      "peak": 0.7775075590035105,
+      "rms": 0.10412601730117664
+    }
+  ]
+}

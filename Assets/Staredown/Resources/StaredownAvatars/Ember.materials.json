@@ -1,0 +1,199 @@
+{
+  "materials": [
+    {
+      "name": "Ember_Scales",
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.57,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0,
+      "albedoTexture": "StaredownAvatars/Ember_ScalesAlbedo",
+      "normalTexture": "StaredownAvatars/Ember_ScalesNormal",
+      "normalScale": 0.48
+    },
+    {
+      "name": "Ember_Belly",
+      "baseColor": [
+        0.7300000190734863,
+        0.3100000023841858,
+        0.06400000303983688,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.550000011920929,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Membrane",
+      "baseColor": [
+        0.550000011920929,
+        0.08500000089406967,
+        0.017000000923871994,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Horn",
+      "baseColor": [
+        0.06499999761581421,
+        0.03500000014901161,
+        0.026000000536441803,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.3799999952316284,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Ivory",
+      "baseColor": [
+        0.6800000071525574,
+        0.47999998927116394,
+        0.23999999463558197,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.3400000035762787,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Mouth",
+      "baseColor": [
+        0.039000000804662704,
+        0.004000000189989805,
+        0.004999999888241291,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5899999737739563,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Iris",
+      "baseColor": [
+        0.9200000166893005,
+        0.3100000023841858,
+        0.004000000189989805,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.20000000298023224,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_IrisRay",
+      "baseColor": [
+        0.4300000071525574,
+        0.054999999701976776,
+        0.0020000000949949026,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.28999999165534973,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Pupil",
+      "baseColor": [
+        0.003000000026077032,
+        0.0020000000949949026,
+        0.0010000000474974513,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.11999999731779099,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Glint",
+      "baseColor": [
+        0.949999988079071,
+        0.8799999952316284,
+        0.6399999856948853,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.15000000596046448,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0
+    },
+    {
+      "name": "Ember_Scales_Championship",
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.57,
+      "emission": [
+        0,
+        0,
+        0
+      ],
+      "emissionStrength": 0,
+      "albedoTexture": "StaredownAvatars/Ember_ScalesAlbedo",
+      "normalTexture": "StaredownAvatars/Ember_ScalesNormal",
+      "normalScale": 0.48,
+      "occlusionTexture": "StaredownAvatars/Ember_Scales_Occlusion",
+      "occlusionStrength": 0.62
+    }
+  ]
+}

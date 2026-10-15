@@ -1,0 +1,176 @@
+using System;
+using System.Linq;
+using UnityEngine;
+
+namespace Staredown
+{
+ // Phone clients share the host-owned tournament and room protocol with Quest.
+ // This scene has an ordinary camera; no OVRCameraRig or XR runtime is started.
+ public sealed class StareMobileSession : MonoBehaviour
+ {
+  public Camera ViewCamera;
+  public StareMobileCamera MobileCamera {get;private set;}
+  public ArenaState State {get;private set;}=new ArenaState();
+  public int LocalId {get;private set;}=-1;
+  public string RoomCode {get;private set;}="";
+  public string Status {get;private set;}="Enable your camera, or explore a room first.";
+  public bool Connected=>LocalId>=0;
+  public bool Busy {get;private set;}
+  public bool Hosting=>model!=null;
+  public bool CanMove=>!Connected||State.phase==(int)MatchPhase.Lobby||State.fighters.Any(f=>f.id==LocalId&&!f.alive);
+  public bool CanDance=>Connected&&State.fighters.Any(f=>f.id==LocalId&&!f.disconnected);
+  public Vector2 MoveInput,LookInput;
+  public StareVisuals Visuals {get;private set;}
+  public StareCameraStream CameraHeads {get;private set;}
+  Tournament model;IStareTransport transport;int generation,placed=-1,lastPhase=-1;
+  bool lastAlive=true,practice,practiceStarted,profileSent;float sendAt,yaw,pitch;Vector3 floor=new Vector3(0,0,-10);
+  AudioSource music,effects;int effectPhase=-1,aliveCount=-1;
+  void Awake()
+  {
+   Application.targetFrameRate=60;Application.runInBackground=true;Screen.sleepTimeout=SleepTimeout.NeverSleep;
+#if STARE_MOBILE
+   Screen.orientation=ScreenOrientation.LandscapeLeft;
+#endif
+  }
+  void Start()
+  {
+   if(ViewCamera==null){var go=new GameObject("Mobile arena camera");ViewCamera=go.AddComponent<Camera>();}
+   if(ViewCamera.GetComponent<AudioListener>()==null)ViewCamera.gameObject.AddComponent<AudioListener>();
+   ViewCamera.tag="MainCamera";ViewCamera.stereoTargetEye=StereoTargetEyeMask.None;ViewCamera.fieldOfView=65;ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=160;
+   ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.identity);
+   MobileCamera=gameObject.AddComponent<StareMobileCamera>();MobileCamera.FrameReady+=ForwardCamera;
+   CameraHeads=gameObject.AddComponent<StareCameraStream>();
+   Visuals=gameObject.AddComponent<StareVisuals>();Visuals.Build();Visuals.SetArenaTheme(0);HideVrMenus();
+   var hud=gameObject.AddComponent<StareMobileHud>();hud.Initialize(this);
+   music=gameObject.AddComponent<AudioSource>();music.clip=Resources.Load<AudioClip>("Audio/ArenaPulse");music.loop=true;music.volume=.2f;music.spatialBlend=0;music.Play();
+   effects=gameObject.AddComponent<AudioSource>();effects.playOnAwake=false;effects.volume=.5f;
+   Debug.Log("[STARE MOBILE] ready / ordinary camera / shared numeric Relay rooms / camera requires explicit consent");
+  }
+  void HideVrMenus()
+  {
+   if(Visuals.menu!=null)Visuals.menu.gameObject.SetActive(false);
+   if(Visuals.characterMenu!=null)Visuals.characterMenu.gameObject.SetActive(false);
+   Visuals.overview.enabled=false;if(Visuals.hud!=null)Visuals.hud.text="";
+  }
+  public void Host()=>Connect(true,"");
+  public void Join(string code)=>Connect(false,code);
+  public void Practice()
+  {
+   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,"PHONE PLAYER");model.EnableBotFill();model.SelectAvatar(0,2);Status="Practice: look at the camera and keep both eyes open to calibrate.";
+  }
+  public void StartMatch(){if(model!=null&&!model.Start())Status="Every human needs a visible face and open-eye calibration before starting.";}
+  async void Connect(bool host,string code)
+  {
+   if(Busy)return;
+   if(!host&&!StareRelayNetwork.ValidCode(code)){Status="Enter the 4-digit room code.";return;}
+   Leave();Busy=true;int request=generation;var relay=new StareRelayNetwork();transport=relay;
+   Status=host?"Creating room…":"Joining room…";
+   try
+   {
+    if(host)
+    {
+     string room=await relay.HostAsync();if(request!=generation||this==null)return;
+     while(!relay.Bound&&string.IsNullOrEmpty(relay.Error)){relay.Tick();await System.Threading.Tasks.Task.Delay(20);if(request!=generation||this==null)return;}
+     if(!string.IsNullOrEmpty(relay.Error))throw new InvalidOperationException(relay.Error);
+     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,"PHONE HOST");model.EnableBotFill();model.SelectAvatar(0,2);Busy=false;Status="Share the room code. Explore while friends join.";
+    }
+    else {await relay.JoinAsync(code);if(request!=generation||this==null)return;RoomCode=StareRelayNetwork.NormalizeCode(code);Status="Connected to Relay. Waiting for the host…";}
+   }
+   catch(Exception e)
+   {if(request!=generation||this==null)return;relay.Dispose();transport=null;Busy=false;LocalId=-1;RoomCode="";Status=e is InvalidOperationException||e is ArgumentException?e.Message:"Room connection failed. Check the code and internet, then try again.";Debug.LogWarning("[STARE MOBILE] "+Status);}
+  }
+  public void Leave()
+  {
+   generation++;transport?.Dispose();transport=null;model=null;LocalId=-1;Busy=false;RoomCode="";State=new ArenaState();CameraHeads?.Reset();profileSent=false;placed=-1;lastPhase=-1;practice=practiceStarted=false;MoveInput=LookInput=Vector2.zero;floor=new Vector3(0,0,-10);yaw=pitch=0;
+   Status="Choose practice, create a room, or join friends.";
+  }
+  public void Act(string action)
+  {
+   if(action=="camera")
+   {
+    if(MobileCamera.Running){SendProfile(false);MobileCamera.StopCamera();}else MobileCamera.StartCamera();return;
+   }
+   if(action=="calibrate"){MobileCamera.Calibrate();return;}
+   if(action=="bot-fill"){if(model!=null&&State.phase==(int)MatchPhase.Lobby)model.SetBotFill(!model.BotFillEnabled);return;}
+   if(action=="music"){music.mute=!music.mute;return;}
+   if(action=="leave"){Leave();return;}
+   if(action.StartsWith("dance:")){int dance;if(CanDance&&int.TryParse(action.Substring(6),out dance)&&dance>=-1&&dance<=3){if(model!=null)model.Dance(LocalId,dance>=0,Mathf.Max(0,dance));else transport?.Send(0,new WireMessage{kind="dance",dancing=dance>=0,dance=Mathf.Max(0,dance)});}return;}
+  }
+  void SendProfile(bool enabled)
+  {
+   if(!Connected)return;
+   var message=new WireMessage{kind="cameraProfile",camera=enabled,id=LocalId};
+   if(model!=null)CameraHeads.Handle(message,LocalId,model,transport,LocalId);else transport?.Send(0,message);
+   profileSent=enabled;
+  }
+  void ForwardCamera(byte[] jpeg)
+  {if(Connected&&MobileCamera.Running&&MobileCamera.Valid)CameraHeads.Publish(jpeg,LocalId,model,transport);}
+  void Pump()
+  {
+   if(transport==null)return;transport.Tick();StareNetwork.Incoming packet;
+   for(int i=0;i<100&&transport.Poll(out packet);i++)
+   {
+    WireMessage message;try{message=JsonUtility.FromJson<WireMessage>(packet.json);}catch{transport.ClosePeer(packet.sender);continue;}if(message==null)continue;
+    if(message.kind=="failed"&&packet.sender<0){string error=transport.Error;Leave();Status="Connection ended: "+error;break;}
+    if(CameraHeads.Handle(message,packet.sender,model,transport,LocalId))continue;
+    if(model!=null)
+    {
+     if(message.kind=="connected"){if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){transport.ClosePeer(packet.sender);continue;}transport.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender});}
+     else if(message.kind=="disconnected")model.Remove(packet.sender);
+     else if(message.kind=="input"&&Finite(message.left)&&Finite(message.right)&&Finite(message.yaw)&&Finite(message.pitch)){model.Input(packet.sender,message.left,message.right,message.valid,message.ready,message.blink,message.yaw,message.pitch,message.demo);model.Presence(packet.sender,message.presence);if(message.hasRoomPose)model.RoomPose(packet.sender,message.roomPosition,message.roomYaw);}
+     else if(message.kind=="avatar")model.SelectAvatar(packet.sender,message.avatar,message.avatarUserId);
+     else if(message.kind=="skin")model.SelectSkin(packet.sender,message.skin);
+     else if(message.kind=="dance")model.Dance(packet.sender,message.dancing,message.dance);
+     else if(message.kind=="throw")model.Throw(packet.sender,message.prop,message.origin,message.velocity);
+     else if(message.kind=="avatarPose"){byte[] pose;var fighter=model.Find(packet.sender);if(fighter!=null&&fighter.avatar==StareAvatarCatalog.Meta&&model.Clock-fighter.lastAvatarPose>=.08f&&TryPose(message.pose,out pose)){fighter.lastAvatarPose=model.Clock;transport.Broadcast(new WireMessage{kind="avatarPose",id=packet.sender,pose=message.pose});}}
+    }
+    else
+    {
+     if(message.kind=="welcome"){LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});SendProfile(MobileCamera.Running);Status="Room "+RoomCode+". Explore and wait for the host.";}
+     if(message.kind=="state"&&message.state!=null)State=message.state;
+     if(message.kind=="disconnected"){string error=transport.Error;Leave();Status="Connection ended: "+error;break;}
+    }
+   }
+  }
+  static bool Finite(float value)=>!float.IsNaN(value)&&!float.IsInfinity(value);
+  static bool TryPose(string text,out byte[] pose){pose=null;if(string.IsNullOrEmpty(text)||text.Length>5464)return false;try{pose=Convert.FromBase64String(text);return pose.Length>0&&pose.Length<=4096;}catch{return false;}}
+  void Update()
+  {
+   if(MobileCamera==null||Visuals==null)return;
+   Pump();PlaceForPhase();float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
+   yaw+=LookInput.x;pitch=Mathf.Clamp(pitch-LookInput.y,-65,65);LookInput=Vector2.zero;
+   if(CanMove){var movement=Quaternion.Euler(0,yaw,0)*new Vector3(MoveInput.x,0,MoveInput.y)*3*dt;floor=StareArenaFields.Clamp(State,floor+movement);}
+   ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.Euler(pitch,yaw,0));
+   if(Connected&&MobileCamera.Running!=profileSent)SendProfile(MobileCamera.Running);
+   var presence=new StarePresenceFrame{headTracked=MobileCamera.Valid,head=Quaternion.Euler(MobileCamera.Pitch,MobileCamera.Yaw,0)};
+   if(model!=null)
+   {
+    model.Input(LocalId,MobileCamera.Left,MobileCamera.Right,MobileCamera.Valid,MobileCamera.Ready,MobileCamera.BlinkSequence,MobileCamera.Yaw,MobileCamera.Pitch,false);
+    model.Presence(LocalId,presence);if(CanMove)model.RoomPose(LocalId,floor,yaw);
+    if(practice&&!practiceStarted&&model.Phase==MatchPhase.Lobby&&MobileCamera.Ready&&MobileCamera.Valid&&model.Start())practiceStarted=true;model.Tick(dt);State=model.Snapshot();
+   }
+   if(transport is StareRelayNetwork relay)relay.SetRoomOpen(State.phase==0&&State.fighters.Count(f=>!f.bot)<Tournament.Capacity);
+   if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove,roomPosition=floor,roomYaw=yaw});}
+   PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);Feedback();
+  }
+  void PlaceForPhase()
+  {
+   var local=State.fighters.FirstOrDefault(f=>f.id==LocalId);if(local==null)return;
+   bool phaseChanged=placed!=LocalId||lastPhase!=State.phase;
+   if(phaseChanged||local.alive!=lastAlive){floor=ArenaLayout.Seat(State,LocalId);floor.y=0;var direction=ArenaLayout.Facing(State,LocalId);yaw=Quaternion.LookRotation(direction).eulerAngles.y;pitch=0;placed=LocalId;lastPhase=State.phase;lastAlive=local.alive;}
+   if(!CanMove){floor=ArenaLayout.Seat(State,LocalId);floor.y=0;}
+  }
+  void Feedback()
+  {
+   int alive=State.fighters.Count(f=>f.alive);
+   if(aliveCount>=0&&alive<aliveCount&&State.phase!=0){var sound=Resources.Load<AudioClip>("Audio/Effects/Eliminate");if(sound!=null)effects.PlayOneShot(sound,.56f);}
+   if(effectPhase!=State.phase&&State.phase==(int)MatchPhase.Champion){var sound=Resources.Load<AudioClip>("Audio/Effects/Victory");if(sound!=null)effects.PlayOneShot(sound,.3f);}
+   effectPhase=State.phase;aliveCount=alive;
+  }
+  void OnApplicationPause(bool paused){if(paused){SendProfile(false);MobileCamera?.StopCamera();MoveInput=LookInput=Vector2.zero;}}
+  void OnDestroy(){generation++;transport?.Dispose();if(MobileCamera!=null)MobileCamera.FrameReady-=ForwardCamera;CameraHeads?.Reset();Screen.sleepTimeout=SleepTimeout.SystemSetting;}
+#if UNITY_EDITOR
+  public void TestConnect(IStareTransport testTransport,bool host){Leave();transport=testTransport;if(host){model=new Tournament();model.Add(0,"PHONE HOST");model.EnableBotFill();LocalId=0;}else Busy=true;}
+#endif
+ }
+}
