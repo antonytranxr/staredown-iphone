@@ -1,3 +1,15 @@
+# Mobile controls and camera update — 2026-10-16
+
+Version **1.1.3 (6)** starts in portrait and provides portrait/landscape selection in the always-visible Settings panel. Settings includes saved music mute/volume, voice/microphone, eye calibration and name controls. The home screen requires a valid name before practice, room creation or joining; it saves the visible name without another confirmation dialog.
+
+The native ARKit provider now measures face orientation toward the camera instead of assuming a rear-camera basis. The live view uses the current interface display transform, refreshes orientation while running, removes mirroring from the canonical stream and mirrors only the local preview once. Calibration shows progress and specific guidance; closed eyes, turned faces and stale samples remain invalid. Start checks current camera readiness directly. Mirror capture targets 12 Hz with sustained frame pressure and phone thermal fallbacks; main phone rendering remains 30 FPS with 2× MSAA and the existing resolution cap.
+
+The native policy harness passed 255 checks; iOS 15 arm64 ARC syntax compilation passed. Unity passed 98 pose/calibration/preview, 21 profile/settings, 19 scene/touch, 14 continuity and 76 UI raycast/layout checks. Portrait and landscape home/settings/lobby were captured and inspected. A real Relay room with synthetic camera input reached Duel, eliminated on a blink, and separately enforced face-absence loss while continuing video. Mirror cadence/budget simulation passed 766 checks.
+
+Unity 6000.3.26f1 exported 1.1.3 (6) successfully with zero errors and three warnings. Twenty-nine export checks verify portrait default, both landscapes, no upside-down UI, native UnityScene lifecycle, ARKit/AVFoundation, native ARC, exact new camera source and generated orientation linkage. See `MOBILE_CONTROLS_VALIDATION.json`. Run `Tools/verify_mobile_export.py EXPORT --source-project PROJECT` to validate another export.
+
+No new signed IPA or TestFlight upload was produced. Physical iPhone camera presentation, live calibration, microphone/speaker behavior and sustained heat/FPS still require device validation. Android phone packaging remains deferred. The shared Quest mirror source changed but no new Quest APK was built in this update.
+
 # iOS 27 launch compatibility — 2026-10-16
 
 The 1.1.1 (4) tester report traps in UIKit's no-scene-lifecycle check about 0.24 seconds after launch on iOS 27.0.1. The iPhone project now uses Unity 6000.3.26f1 LTS, which includes Unity's native UnityScene lifecycle. The next phone version is **1.1.2 (5)** with a minimum deployment target of **iOS 15**.

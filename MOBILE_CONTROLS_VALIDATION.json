@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-16",
+  "phone_version": "1.1.3",
+  "phone_build": 6,
+  "shared_editor": "6000.2.7f2",
+  "iphone_editor": "6000.3.26f1",
+  "changes": [
+    "Always visible Settings with persisted music mute and volume",
+    "Portrait on launch; explicit portrait/landscape mode; no upside-down UI",
+    "Native front-camera display transform refreshed during use; canonical unmirrored stream and one local selfie mirror",
+    "Camera-relative face-angle calibration; progress and specific guidance; direct start readiness guard",
+    "Require and save the visible name before Practice/Create/Join",
+    "Mirror12Hz with frame-pressure and phone thermal fallback"
+  ],
+  "checks": {
+    "native_camera_policy": 255,
+    "native_arm64_ios15_arc_syntax": "passed",
+    "unity_native_pose_calibration_orientation_preview": 98,
+    "player_name_sanitization": 7,
+    "mobile_profiles_settings_entry": 21,
+    "mobile_scene_camera_touch": 19,
+    "camera_continuity": 14,
+    "ui_raycast_layout_name_settings": 76,
+    "mirror_simulated_cadence_budget": 766
+  },
+  "relay_blink_round": "FAILED System.AggregateException: One or more errors occurred. (Cross-play step timed out: Share the room code. Explore while friends join. / HOST LEFT OR CONNECTION LOST / steps=287) ---> System.Exception: Cross-play step timed out: Share the room code. Explore while friends join. / HOST LEFT OR CONNECTION LOST / steps=287\n  at StareMobileChecks+<>c__DisplayClass3_0.<CrossPlayRound>g__pumpUntil|1 (System.Func`1[TResult] done, System.Int32 limit) [0x001e1] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:93 \n  at StareMobileChecks.CrossPlayRound () [0x003c9] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:101 \n   --- End of inner exception stack trace ---\n---> (Inner Exception #0) System.Exception: Cross-play step timed out: Share the room code. Explore while friends join. / HOST LEFT OR CONNECTION LOST / steps=287\n  at StareMobileChecks+<>c__DisplayClass3_0.<CrossPlayRound>g__pumpUntil|1 (System.Func`1[TResult] done, System.Int32 limit) [0x001e1] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:93 \n  at StareMobileChecks.CrossPlayRound () [0x003c9] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:101 <---\n",
+  "relay_face_loss_round": "FAILED System.AggregateException: One or more errors occurred. (Face-loss cross-play timed out at active duel and live video: Choose practice, create a room, or join friends. / HOST LEFT OR CONNECTION LOST / steps=319 / absentFrames=0) ---> System.Exception: Face-loss cross-play timed out at active duel and live video: Choose practice, create a room, or join friends. / HOST LEFT OR CONNECTION LOST / steps=319 / absentFrames=0\n  at StareMobileChecks+<>c__DisplayClass4_0.<CrossPlayFaceLossRound>g__pumpUntil|0 (System.Func`1[TResult] done, System.Int32 limit, System.String label) [0x00423] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:154 \n  at StareMobileChecks.CrossPlayFaceLossRound () [0x004f4] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:165 \n   --- End of inner exception stack trace ---\n---> (Inner Exception #0) System.Exception: Face-loss cross-play timed out at active duel and live video: Choose practice, create a room, or join friends. / HOST LEFT OR CONNECTION LOST / steps=319 / absentFrames=0\n  at StareMobileChecks+<>c__DisplayClass4_0.<CrossPlayFaceLossRound>g__pumpUntil|0 (System.Func`1[TResult] done, System.Int32 limit, System.String label) [0x00423] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:154 \n  at StareMobileChecks.CrossPlayFaceLossRound () [0x004f4] in /Users/Antony/Documents/Codex/MetaVRStarter/Assets/Staredown/Editor/StareMobileChecks.cs:165 <---\n",
+  "ui_captures": [
+    "outputs/Mobile-controls-2026-10-16/landscape-home.png",
+    "outputs/Mobile-controls-2026-10-16/landscape-practice-lobby.png",
+    "outputs/Mobile-controls-2026-10-16/landscape-settings.png",
+    "outputs/Mobile-controls-2026-10-16/portrait-home.png",
+    "outputs/Mobile-controls-2026-10-16/portrait-practice-lobby.png",
+    "outputs/Mobile-controls-2026-10-16/portrait-settings.png"
+  ],
+  "unity_export": {
+    "result": "Succeeded",
+    "errors": 0,
+    "warnings": 3,
+    "duration_seconds": 59.99
+  },
+  "export_verification": {
+    "ok": true,
+    "checks": 29,
+    "passed": 29,
+    "failed": [],
+    "export": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/outputs/Staredown-iOS-1.1.3-build6",
+    "version": "1.1.3",
+    "build": "6",
+    "nativeCameraSha256": "b1272f657419b9a32c63299cbda8bbd17f8832dacda0a03a6faf8b962e5ed3c4",
+    "expectedNativeCameraSha256": "b1272f657419b9a32c63299cbda8bbd17f8832dacda0a03a6faf8b962e5ed3c4",
+    "orientationSymbolFiles": [
+      "Il2CppOutputProject/Source/il2cppOutput/Assembly-CSharp__3.cpp"
+    ]
+  },
+  "editor_restored": {
+    "playing": false,
+    "quest_scene": "Assets/Staredown/Scenes/Staredown.unity",
+    "build_target": "Android",
+    "desktop_xr_init": true
+  },
+  "limits": [
+    "Synthetic eye/preview input; physical iPhone calibration and camera rotation require device test",
+    "Mirror cadence tests are simulated; sustained phone heat/GPU/FPS not measured",
+    "Unity Xcode export only; no new signed IPA or TestFlight upload",
+    "No new Android phone or Quest APK produced"
+  ]
+}

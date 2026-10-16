@@ -7,6 +7,14 @@ using Staredown;
 
 public static class StareMobileChecks
 {
+ sealed class NameFixture : IDisposable
+ {
+  const string Name="Staredown.PlayerName",Confirmed="Staredown.PlayerNameConfirmed";
+  readonly bool hadName=PlayerPrefs.HasKey(Name),hadConfirmed=PlayerPrefs.HasKey(Confirmed);
+  readonly string oldName=PlayerPrefs.GetString(Name,"");readonly int oldConfirmed=PlayerPrefs.GetInt(Confirmed,0);
+  public NameFixture(){StarePlayerName.Save("Phone Fixture");}
+  public void Dispose(){if(hadName)PlayerPrefs.SetString(Name,oldName);else PlayerPrefs.DeleteKey(Name);if(hadConfirmed)PlayerPrefs.SetInt(Confirmed,oldConfirmed);else PlayerPrefs.DeleteKey(Confirmed);PlayerPrefs.Save();}
+ }
  public static string CameraContinuity()
  {
   int count=0;Action<bool,string> check=(ok,label)=>{if(!ok)throw new Exception("Mobile continuity: "+label);count++;};
@@ -38,6 +46,8 @@ public static class StareMobileChecks
  }
  public static string Basics()
  {
+  using(var name=new NameFixture())
+  {
   int count=0;Action<bool,string> check=(ok,label)=>{if(!ok)throw new Exception("Mobile: "+label);count++;};
   var session=UnityEngine.Object.FindFirstObjectByType<StareMobileSession>();if(session==null)throw new Exception("Run the mobile scene first");
   check(session.ViewCamera!=null&&session.ViewCamera.stereoTargetEye==StereoTargetEyeMask.None,"ordinary monoscopic arena camera");
@@ -56,9 +66,12 @@ public static class StareMobileChecks
   var look=hud.LookControl;check(look.Begin(22,Vector2.zero),"independent look finger starts");look.Move(23,new Vector2(100,0));check(session.LookInput==Vector2.zero,"wrong finger cannot turn");look.Move(22,new Vector2(100,0));check(session.LookInput.x>0,"owned swipe turns camera");look.End(22);check(session.LookInput==Vector2.zero,"look release clears deltas");
   var eliminated=new Fighter{id=0,alive=false,pair=0};var state=new ArenaState{phase=(int)MatchPhase.Countdown,remaining=3,fighters=new[]{eliminated},pairs=new[]{new Pairing{a=0,b=1}}};string caption=StareMobileHud.MatchCaption(state,eliminated,"");check(!caption.Contains("Eyes open")&&caption.Contains("You're out"),"spectators never see stare countdown");
   session.Leave();return count+" mobile scene/camera/touch checks passed";
+  }
  }
  public static async Task<string> CrossPlayRound()
  {
+  using(var name=new NameFixture())
+  {
   var phone=UnityEngine.Object.FindFirstObjectByType<StareMobileSession>();if(phone==null)throw new Exception("Mobile scene missing");
   var peer=new StareRelayNetwork();long sequence=1;double capture=Time.realtimeSinceStartupAsDouble;int vr=-1;
   var jpeg=StareCameraChecks.TestJpeg();bool face=false,blink=false;int steps=0;
@@ -92,11 +105,13 @@ public static class StareMobileChecks
    return "Live numeric Relay room: phone host + VR protocol peer +14bots; calibrated camera feed received; phone camera blink caused authoritative elimination; eliminated phone can roam";
   }
  finally{peer.Dispose();phone.Leave();phone.MobileCamera.StopCamera();}
+  }
  }
  public static async Task<string> CrossPlayFaceLossRound()
  {
+  using(var name=new NameFixture())
+  {
   var phone=UnityEngine.Object.FindFirstObjectByType<StareMobileSession>();if(phone==null)throw new Exception("Run the mobile scene first");
-  const string preference="Staredown.PlayerName";bool hadName=PlayerPrefs.HasKey(preference);string originalName=PlayerPrefs.GetString(preference,"");
   var peer=new StareRelayNetwork();var jpeg=StareCameraChecks.TestJpeg();long sequence=1;double capture=Time.realtimeSinceStartupAsDouble;
   int vr=-1,steps=0,frames=0,framesWhileAbsent=0,lastFrameSequence=0,sequenceBeforeLoss=0,roundBeforeLoss=-1,initialBlinks=0;bool faceVisible=true,losing=false;
   float lossClock=-1,eliminationClock=-1;ArenaState remoteState=null;
@@ -163,7 +178,7 @@ public static class StareMobileChecks
   finally
   {
    peer.Dispose();phone.Leave();phone.MobileCamera.StopCamera();
-   if(hadName)PlayerPrefs.SetString(preference,originalName);else PlayerPrefs.DeleteKey(preference);PlayerPrefs.Save();
+  }
   }
  }
  public static string Render(string path)

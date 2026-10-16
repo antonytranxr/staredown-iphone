@@ -8,6 +8,7 @@ namespace Staredown
  {
   public const int MaxLength=16;
   const string Preference="Staredown.PlayerName";
+  const string ConfirmedPreference="Staredown.PlayerNameConfirmed";
   public static bool InputCharacter(char value)=>char.IsLetterOrDigit(value)||char.IsWhiteSpace(value)||value=='-'||value=='_'||value=='\'';
   public static string Clean(string value)
   {
@@ -26,9 +27,22 @@ namespace Staredown
   }
   public static string Saved
   {get{string value=Clean(PlayerPrefs.GetString(Preference,"Player"));return value.Length>0?value:"Player";}}
+  public static bool IsValid(string value)
+  {foreach(char character in Clean(value))if(char.IsLetterOrDigit(character))return true;return false;}
+  public static bool HasChosen
+  {
+   get
+   {
+    string value=Clean(PlayerPrefs.GetString(Preference,""));
+    // Older mobile menus saved their placeholder automatically. Require a
+    // real confirmation once, while retaining previously entered names.
+    return IsValid(value)&&(PlayerPrefs.GetInt(ConfirmedPreference,0)==1||value!="Player");
+   }
+  }
   public static string Save(string value)
   {
-   value=Clean(value);if(value.Length==0)value="Player";
+   value=Clean(value);bool valid=IsValid(value);if(value.Length==0)value="Player";
+   if(valid)PlayerPrefs.SetInt(ConfirmedPreference,1);else PlayerPrefs.DeleteKey(ConfirmedPreference);
    PlayerPrefs.SetString(Preference,value);PlayerPrefs.Save();return value;
   }
 #if UNITY_EDITOR

@@ -27,6 +27,20 @@ namespace Staredown.Editor
                 project.SetCompileFlagsForFile(framework, file, flags);
             }
             File.WriteAllText(projectPath, project.WriteToString());
+            // Allow switching modes at runtime; the default PlayerSetting and
+            // phone Awake both select portrait. Never offer upside-down UI.
+            string plistPath = Path.Combine(path, "Info.plist");
+            var plist = new PlistDocument(); plist.ReadFromFile(plistPath);
+            foreach (string key in new[] { "UISupportedInterfaceOrientations", "UISupportedInterfaceOrientations~ipad" })
+            {
+                plist.root.values.Remove(key);
+                var orientations = plist.root.CreateArray(key);
+                orientations.AddString("UIInterfaceOrientationPortrait");
+                orientations.AddString("UIInterfaceOrientationLandscapeLeft");
+                orientations.AddString("UIInterfaceOrientationLandscapeRight");
+            }
+            plist.root.SetString("UIInterfaceOrientation", "UIInterfaceOrientationPortrait");
+            File.WriteAllText(plistPath, plist.WriteToString());
             if (PhoneSdkPrivacyScope.Current == null) throw new System.Exception("SDK privacy declarations were not merged");
             PhoneSdkPrivacyScope.Current.WriteResourceBundle(path);
         }

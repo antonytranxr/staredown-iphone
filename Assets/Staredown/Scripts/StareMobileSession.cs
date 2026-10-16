@@ -14,6 +14,10 @@ namespace Staredown
   public StareVoice Voice {get;private set;}
   public string VoiceRoomId=>(transport as StareRelayNetwork)?.VoiceKey;
   public string PlayerName=>StarePlayerName.Saved;
+  public bool HasPlayerName=>StarePlayerName.HasChosen;
+  public bool MusicEnabled=>PlayerPrefs.GetInt("Staredown.MobileMusicEnabled",1)!=0;
+  public float MusicVolume=>Mathf.Clamp01(PlayerPrefs.GetFloat("Staredown.MobileMusicVolume",.2f));
+  public bool LandscapeMode {get;private set;}
   public ArenaState State {get;private set;}=new ArenaState();
   public int LocalId {get;private set;}=-1;
   public string RoomCode {get;private set;}="";
@@ -21,6 +25,15 @@ namespace Staredown
   public bool Connected=>LocalId>=0;
   public bool Busy {get;private set;}
   public bool Hosting=>model!=null;
+  public string StartReadinessStatus
+  {
+   get
+   {
+    var pending=State.fighters.Where(f=>!f.bot&&(!f.ready||!f.valid)).ToArray();
+    if(pending.Length>0)return "Waiting for "+string.Join(", ",pending.Take(2).Select(f=>f.name))+ (pending.Length>2?" +"+(pending.Length-2):"")+" to calibrate";
+    return State.fighters.Length<2?"Waiting for another player":"All players ready";
+   }
+  }
   public bool CanMove=>!Connected||State.phase==(int)MatchPhase.Lobby||State.fighters.Any(f=>f.id==LocalId&&!f.alive);
   public bool CanDance=>Connected&&State.fighters.Any(f=>f.id==LocalId&&!f.disconnected);
   public Vector2 MoveInput,LookInput;
@@ -33,10 +46,22 @@ namespace Staredown
   void Awake()
   {
    Application.targetFrameRate=RenderFrameRate;Application.runInBackground=true;Screen.sleepTimeout=SleepTimeout.NeverSleep;
-#if STARE_MOBILE
-   Screen.orientation=ScreenOrientation.LandscapeLeft;
-#endif
+   SetLandscapeMode(false);
   }
+  public void SetLandscapeMode(bool landscape)
+  {
+   LandscapeMode=landscape;MoveInput=LookInput=Vector2.zero;
+#if STARE_MOBILE && !UNITY_EDITOR
+   Screen.autorotateToPortrait=false;Screen.autorotateToPortraitUpsideDown=false;
+   Screen.autorotateToLandscapeLeft=true;Screen.autorotateToLandscapeRight=true;
+   Screen.orientation=landscape?ScreenOrientation.AutoRotation:ScreenOrientation.Portrait;
+#endif
+   MobileCamera?.RefreshOrientation();
+  }
+  public void SetMusicEnabled(bool enabled)
+  {PlayerPrefs.SetInt("Staredown.MobileMusicEnabled",enabled?1:0);PlayerPrefs.Save();if(music!=null)music.mute=!enabled;}
+  public void SetMusicVolume(float volume)
+  {if(float.IsNaN(volume)||float.IsInfinity(volume))return;volume=Mathf.Clamp01(volume);PlayerPrefs.SetFloat("Staredown.MobileMusicVolume",volume);PlayerPrefs.Save();if(music!=null)music.volume=volume;}
   void Start()
   {
    if(ViewCamera==null){var go=new GameObject("Mobile arena camera");ViewCamera=go.AddComponent<Camera>();}
@@ -49,7 +74,7 @@ namespace Staredown
    Visuals=gameObject.AddComponent<StareVisuals>();Visuals.Build();Visuals.SetArenaTheme(0);HideVrMenus();
    Voice=gameObject.AddComponent<StareVoice>();Voice.Initialize(this);
    var hud=gameObject.AddComponent<StareMobileHud>();hud.Initialize(this);
-   music=gameObject.AddComponent<AudioSource>();music.clip=Resources.Load<AudioClip>("Audio/ArenaPulse");music.loop=true;music.volume=.2f;music.spatialBlend=0;music.Play();
+   music=gameObject.AddComponent<AudioSource>();music.clip=Resources.Load<AudioClip>("Audio/ArenaPulse");music.loop=true;music.volume=MusicVolume;music.mute=!MusicEnabled;music.spatialBlend=0;music.Play();
    effects=gameObject.AddComponent<AudioSource>();effects.playOnAwake=false;effects.volume=.5f;
    eliminationSound=Resources.Load<AudioClip>("Audio/Effects/Eliminate");victorySound=Resources.Load<AudioClip>("Audio/Effects/Victory");
    ApplyPhonePerformance();
@@ -65,17 +90,26 @@ namespace Staredown
   public void Join(string code)=>Connect(false,code);
   public void Practice()
   {
+   if(!RequirePlayerName())return;
    Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);Status="Practice: look at the camera and keep both eyes open to calibrate.";
   }
   public void SetPlayerName(string value)
   {
+   if(!StarePlayerName.IsValid(value)){Status="Enter a name with at least one letter or number.";return;}
    string saved=StarePlayerName.Save(value);if(!Connected)return;
    if(model!=null)model.SetName(LocalId,saved);else transport?.Send(0,new WireMessage{kind="name",name=saved});
   }
-  public void StartMatch(){if(model!=null&&!model.Start())Status="Every human needs a visible face and open-eye calibration before starting.";}
+  public void StartMatch()
+  {
+   if(model==null)return;
+   if(MobileCamera==null||!MobileCamera.Running||!MobileCamera.Ready||!MobileCamera.Valid)
+   {Status=MobileCamera!=null&&MobileCamera.Running?MobileCamera.Status:"Enable your camera and calibrate before starting.";return;}
+   if(!model.Start())Status=StartReadinessStatus;
+  }
   async void Connect(bool host,string code)
   {
    if(Busy)return;
+   if(!RequirePlayerName())return;
    if(!host&&!StareRelayNetwork.ValidCode(code)){Status="Enter the 4-digit room code.";return;}
    Leave();Busy=true;int request=generation;var relay=new StareRelayNetwork();transport=relay;
    Status=host?"Creating room…":"Joining room…";
@@ -106,12 +140,14 @@ namespace Staredown
    }
    if(action=="calibrate"){MobileCamera.Calibrate();return;}
    if(action=="bot-fill"){if(model!=null&&State.phase==(int)MatchPhase.Lobby)model.SetBotFill(!model.BotFillEnabled);return;}
-   if(action=="music"){music.mute=!music.mute;return;}
+   if(action=="music"){SetMusicEnabled(!MusicEnabled);return;}
    if(action=="mic"){Voice?.ToggleMic();return;}
    if(action=="voice"){Voice?.ToggleVoice();return;}
    if(action=="leave"){Leave();return;}
    if(action.StartsWith("dance:")){int dance;if(CanDance&&int.TryParse(action.Substring(6),out dance)&&dance>=-1&&dance<=3){if(model!=null)model.Dance(LocalId,dance>=0,Mathf.Max(0,dance));else transport?.Send(0,new WireMessage{kind="dance",dancing=dance>=0,dance=Mathf.Max(0,dance)});}return;}
   }
+  bool RequirePlayerName()
+  {if(HasPlayerName)return true;Status="Enter your name before entering the arena.";return false;}
   void SendProfile(bool enabled)
   {
    if(!Connected)return;

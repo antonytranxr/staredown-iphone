@@ -14,9 +14,9 @@ using Staredown;
 
 public static class StareMobileBuild
 {
- public const string Version="1.1.2";
+ public const string Version="1.1.3";
  public const int AndroidCode=2;
- public const string IOSBuildNumber="5";
+ public const string IOSBuildNumber="6";
  public const string Scene="Assets/Staredown/Scenes/StaredownMobile.unity";
  public static bool BuildingMobile {get;private set;}
  const string PhoneManifest="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" android:installLocation=\"auto\"><uses-permission android:name=\"android.permission.INTERNET\"/><uses-permission android:name=\"android.permission.CAMERA\"/><uses-permission android:name=\"android.permission.RECORD_AUDIO\"/><uses-feature android:name=\"android.hardware.camera.front\" android:required=\"false\"/><application android:label=\"@string/app_name\" android:icon=\"@mipmap/app_icon\" android:allowBackup=\"false\"><activity android:name=\"com.unity3d.player.UnityPlayerGameActivity\" android:theme=\"@style/BaseUnityGameActivityTheme\" android:configChanges=\"locale|fontScale|keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode\" android:launchMode=\"singleTask\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\"/><category android:name=\"android.intent.category.LAUNCHER\"/></intent-filter><meta-data android:name=\"unityplayer.UnityActivity\" android:value=\"true\"/></activity><meta-data android:name=\"unityplayer.SkipPermissionsDialog\" android:value=\"true\"/></application></manifest>";
@@ -51,7 +51,7 @@ public static class StareMobileBuild
   try
   {
    BuildingMobile=true;xr.InitManagerOnStart=false;xr.Manager.TrySetLoaders(new System.Collections.Generic.List<UnityEngine.XR.Management.XRLoader>());EditorUtility.SetDirty(xr.Manager);EditorUtility.SetDirty(xr);
-   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion=Version;PlayerSettings.productName="Staredown Mobile";PlayerSettings.Android.bundleVersionCode=AndroidCode;PlayerSettings.Android.minSdkVersion=AndroidSdkVersions.AndroidApiLevel26;PlayerSettings.defaultInterfaceOrientation=UIOrientation.LandscapeLeft;
+   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion=Version;PlayerSettings.productName="Staredown Mobile";PlayerSettings.Android.bundleVersionCode=AndroidCode;PlayerSettings.Android.minSdkVersion=AndroidSdkVersions.AndroidApiLevel26;PlayerSettings.defaultInterfaceOrientation=UIOrientation.Portrait;
    PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android,false);PlayerSettings.SetGraphicsAPIs(BuildTarget.Android,new[]{UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3});plugin.DefineConstraints=new string[0];plugin.SetCompatibleWithPlatform(BuildTarget.Android,true);plugin.SaveAndReimport();
    File.WriteAllText(manifest,PhoneManifest);AssetDatabase.ImportAsset(manifest,ImportAssetOptions.ForceUpdate);AssetDatabase.SaveAssets();
    var options=new BuildPlayerOptions{scenes=new[]{Scene},locationPathName=apk,target=BuildTarget.Android,options=BuildOptions.None,extraScriptingDefines=new[]{"STARE_MOBILE"}};
@@ -90,7 +90,7 @@ public static class StareMobileBuild
   {
    BuildingMobile=true;PlayerSettings.SetManagedStrippingLevel(target,ManagedStrippingLevel.High);
    if(xr!=null){xr.InitManagerOnStart=false;EditorUtility.SetDirty(xr);if(xr.Manager!=null){xr.Manager.TrySetLoaders(new System.Collections.Generic.List<UnityEngine.XR.Management.XRLoader>());EditorUtility.SetDirty(xr.Manager);}}
-   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion=Version;PlayerSettings.productName="Staredown Mobile";PlayerSettings.iOS.buildNumber=IOSBuildNumber;PlayerSettings.iOS.targetOSVersionString="15.0";PlayerSettings.iOS.cameraUsageDescription="Staredown uses your front camera to detect blinks and show your live face to players in your current room when you enable the camera.";PlayerSettings.iOS.microphoneUsageDescription="Staredown uses the microphone for optional in-game voice chat.";PlayerSettings.defaultInterfaceOrientation=UIOrientation.LandscapeLeft;
+   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion=Version;PlayerSettings.productName="Staredown Mobile";PlayerSettings.iOS.buildNumber=IOSBuildNumber;PlayerSettings.iOS.targetOSVersionString="15.0";PlayerSettings.iOS.cameraUsageDescription="Staredown uses your front camera to detect blinks and show your live face to players in your current room when you enable the camera.";PlayerSettings.iOS.microphoneUsageDescription="Staredown uses the microphone for optional in-game voice chat.";PlayerSettings.defaultInterfaceOrientation=UIOrientation.Portrait;
    plugin.DefineConstraints=new string[0];plugin.SetCompatibleWithPlatform(BuildTarget.iOS,true);plugin.SaveAndReimport();
    #if UNITY_IOS
    using(var privacy=PhoneSdkPrivacyScope.Begin())

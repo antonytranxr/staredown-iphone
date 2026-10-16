@@ -7,301 +7,407 @@ using UnityEngine.UI;
 
 namespace Staredown
 {
-    /// <summary>Phone controls stay above the arena; camera permission is requested only by a tap.</summary>
+    /// <summary>Responsive phone controls. Camera sharing starts only after an explicit camera tap.</summary>
     public sealed class StareMobileHud : MonoBehaviour
     {
-        static readonly Color Ink = new Color(.035f, .065f, .095f, .96f);
-        static readonly Color Surface = new Color(.075f, .12f, .16f, .97f);
-        static readonly Color Cyan = new Color(.25f, .94f, 1f);
-        static readonly Color Muted = new Color(.67f, .77f, .82f);
-        StareMobileSession session;
-        Canvas canvas;
-        RectTransform safe, home, roomBar, cameraPanel, dancePicker, nameEditor, voicePanel;
-        Text roomLabel, roomStatus, homeStatus, caption, movementHint, lookHint, cameraStatus, cameraPrivacy, cameraTag;
-        Text cameraToggleLabel, startLabel, fillLabel, nameButtonLabel, micButtonLabel, voiceStatus;
-        RawImage preview;
-        InputField code, playerName, nameEditorInput;
-        Button practice, host, join, leave, start, fill, dance, cameraToggle, calibrate, editPlayerName, mic;
-        StareMobileJoystick joystick;
-        StareMobileLookPad lookPad;
-        Font regular, bold;
-        Sprite rounded;
-        Vector2 lastScreen;
-        Rect lastSafe;
-        public RawImage CameraPreview => preview;
-        public string ActiveCaption => caption != null ? caption.text : "";
-        public bool HomeVisible => home != null && home.gameObject.activeSelf;
-        public int MovePointerId => joystick != null ? joystick.PointerId : int.MinValue;
-        public int LookPointerId => lookPad != null ? lookPad.PointerId : int.MinValue;
-        public StareMobileJoystick MovementControl => joystick;
-        public StareMobileLookPad LookControl => lookPad;
-        public InputField PlayerNameInput => playerName;
-        public bool NameEditorVisible => nameEditor != null && nameEditor.gameObject.activeSelf;
+        static readonly Color Ink=new Color(.025f,.045f,.07f,.96f),Surface=new Color(.065f,.105f,.145f,.98f),Cyan=new Color(.25f,.94f,1),Muted=new Color(.67f,.77f,.82f);
+        StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
+        RectTransform safe,home,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
+        Text brand,brandTag,hero,description,namePrompt,homeHint,homeStatus,roomLabel,roomStatus,caption,movementHint,lookHint,cameraTag,cameraStatus,cameraPrivacy;
+        Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus;
+        InputField code,playerName,nameEditorInput;RawImage preview;Slider musicVolume;
+        Button practice,host,join,leave,start,fill,dance,cameraToggle,editPlayerName,settingsButton,settingsDone,nameCancel,nameConfirm,musicToggle,mic,voiceToggle,portraitChoice,landscapeChoice,calibrate,settingsName,settingsLeave;
+        StareMobileJoystick joystick;StareMobileLookPad lookPad;
+        Vector2 lastScreen,layoutSize;Rect lastSafe;bool portrait,lastConnected,lastLobby,lastHosting,layoutReady;
+        string pendingEntry="",pendingCode="",entryError="";bool syncingMusic;
+#if UNITY_EDITOR
+        bool reviewViewport;Vector2 reviewPixels;Rect reviewSafe;
+#endif
+        public RawImage CameraPreview=>preview;
+        public string ActiveCaption=>caption!=null?caption.text:"";
+        public bool HomeVisible=>home!=null&&home.gameObject.activeSelf;
+        public bool NameEditorVisible=>nameEditor!=null&&nameEditor.gameObject.activeSelf;
+        public bool SettingsVisible=>settingsPanel!=null&&settingsPanel.gameObject.activeSelf;
+        public bool IsPortraitLayout=>portrait;
+        public Vector2 LayoutSize=>layoutSize;
+        public RectTransform SafeAreaRect=>safe;
+        public RectTransform HomePanelRect=>home;
+        public RectTransform CameraPanelRect=>cameraPanel;
+        public RectTransform CameraPreviewRect=>preview!=null?preview.rectTransform:null;
+        public RectTransform SettingsPanelRect=>settingsPanel;
+        public RectTransform CaptionPanelRect=>captionPanel;
+        public InputField PlayerNameInput=>playerName;
+        public InputField NameReviewInput=>nameEditorInput;
+        public InputField RoomCodeInput=>code;
+        public Button SettingsButton=>settingsButton;
+        public Button PracticeButton=>practice;
+        public Button HostButton=>host;
+        public Button JoinButton=>join;
+        public Button ConfirmNameButton=>nameConfirm;
+        public Button StartButton=>start;
+        public Button MusicToggleButton=>musicToggle;
+        public Slider MusicVolumeSlider=>musicVolume;
+        public Button PortraitButton=>portraitChoice;
+        public Button LandscapeButton=>landscapeChoice;
+        public Button CalibrateButton=>calibrate;
+        public string PendingEntryAction=>pendingEntry;
+        public bool ValidNameDraft=>playerName!=null&&StarePlayerName.IsValid(playerName.text);
+        public int MovePointerId=>joystick!=null?joystick.PointerId:int.MinValue;
+        public int LookPointerId=>lookPad!=null?lookPad.PointerId:int.MinValue;
+        public StareMobileJoystick MovementControl=>joystick;
+        public StareMobileLookPad LookControl=>lookPad;
 
         public void Initialize(StareMobileSession owner)
         {
-            if (canvas != null) return;
-            session = owner;
-            regular = Resources.Load<Font>("UI/Lato-Regular") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            bold = Resources.Load<Font>("UI/Lato-SemiBold") ?? regular;
-            rounded = RoundedSprite();
-            var root = new GameObject("Mobile overlay", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            root.transform.SetParent(transform, false);
-            canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 80;
-            var scaler = root.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1600, 900); scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = .5f;
-            safe = LayoutRect("Safe area", root.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            EnsureEvents();
-            BuildLook(); BuildHome(); BuildRoom(); BuildCamera(); BuildControls(); BuildNameEditor();
-            UpdateSafeArea(); Update();
+            if(canvas!=null)return;session=owner;
+            regular=Resources.Load<Font>("UI/Lato-Regular")??Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");bold=Resources.Load<Font>("UI/Lato-SemiBold")??regular;rounded=RoundedSprite();
+            var root=new GameObject("Mobile overlay",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler),typeof(GraphicRaycaster));root.transform.SetParent(transform,false);
+            canvas=root.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=80;scaler=root.GetComponent<CanvasScaler>();
+            safe=LayoutRect("Safe area",root.transform,Vector2.zero,Vector2.one,Vector2.zero,Vector2.zero);
+            EnsureEvents();BuildLook();BuildHeader();BuildHome();BuildRoom();BuildCamera();BuildControls();BuildModals();
+            settingsButton.transform.SetAsLastSibling();UpdateSafeArea();Update();
         }
-
         void EnsureEvents()
         {
-            if (EventSystem.current != null) return;
-            var events = new GameObject("Mobile touch events", typeof(EventSystem), typeof(InputSystemUIInputModule));
-            events.transform.SetParent(transform, false);
-            events.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
+            if(EventSystem.current!=null)return;
+            var events=new GameObject("Mobile touch events",typeof(EventSystem),typeof(InputSystemUIInputModule));events.transform.SetParent(transform,false);events.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
         }
-
         void BuildLook()
         {
-            var area = LayoutRect("Swipe to look", safe, new Vector2(.43f, 0), new Vector2(1, .70f), Vector2.zero, Vector2.zero);
-            var image = area.gameObject.AddComponent<Image>(); image.color = Color.clear;
-            lookPad = area.gameObject.AddComponent<StareMobileLookPad>(); lookPad.Initialize(session, canvas);
+            var area=LayoutRect("Swipe to look",safe,Vector2.zero,Vector2.one,Vector2.zero,Vector2.zero);area.gameObject.AddComponent<Image>().color=Color.clear;
+            lookPad=area.gameObject.AddComponent<StareMobileLookPad>();lookPad.Initialize(session,canvas);
         }
-
+        void BuildHeader()
+        {
+            brand=Label("STAREDOWN",safe,Vector2.zero,Vector2.one,32,Color.white,true);brandTag=Label("PHONE × VR",safe,Vector2.zero,Vector2.one,16,Cyan,true);
+            settingsButton=ButtonElement("Settings",safe,Vector2.zero,new Vector2(152,56),()=>ShowSettings(!SettingsVisible));
+        }
         void BuildHome()
         {
-            home = Box("Join the arena", safe, new Vector2(0, .5f), new Vector2(34, 0), new Vector2(480, 660), new Vector2(0, .5f), Ink);
-            Label("STAREDOWN", home, new Vector2(28, -28), new Vector2(424, 48), 39, Color.white, true);
-            Label("PHONE × VR", home, new Vector2(30, -84), new Vector2(420, 26), 18, Cyan, true);
-            Label("Keep your eyes open longer\nthan your opponent.", home, new Vector2(30, -137), new Vector2(420, 82), 28, Color.white, true);
-            playerName = NameField(home, new Vector2(28, -231), new Vector2(424, 54));
-            playerName.onEndEdit.AddListener(value => { session.SetPlayerName(value); playerName.SetTextWithoutNotify(session.PlayerName); });
-            Label("Keep your face in view.\nLeave the camera and you lose.", home, new Vector2(30, -299), new Vector2(420, 60), 22, Muted);
-            practice = ButtonElement("Practice with bots", home, new Vector2(28, -370), new Vector2(424, 60), () => { SaveHomeName(); session.Practice(); }, true);
-            host = ButtonElement("Create a room", home, new Vector2(28, -443), new Vector2(424, 60), () => { SaveHomeName(); session.Host(); });
-            var field = Box("Four digit room code", home, new Vector2(0, 1), new Vector2(28, -516), new Vector2(266, 60), new Vector2(0, 1), Surface);
-            code = field.gameObject.AddComponent<InputField>(); code.characterLimit = StareRelayNetwork.CodeLength;
-            code.contentType = InputField.ContentType.IntegerNumber; code.keyboardType = TouchScreenKeyboardType.NumberPad;
-            var value = Label("", field, new Vector2(18, -7), new Vector2(230, 47), 28, Color.white, true);
-            var placeholder = Label("Room code", field, new Vector2(18, -7), new Vector2(230, 47), 24, Muted);
-            code.textComponent = value; code.placeholder = placeholder; code.targetGraphic = field.GetComponent<Image>();
-            join = ButtonElement("Join", home, new Vector2(308, -516), new Vector2(144, 60), () => { SaveHomeName(); session.Join(code.text); }, true);
-            homeStatus = Label("4 digits · play together from any Wi-Fi", home, new Vector2(29, -589), new Vector2(423, 44), 18, Muted);
+            home=Box("Join the arena",safe,Vector2.one,Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            hero=Label("Don't blink.",home,Vector2.zero,Vector2.one,42,Color.white,true);
+            description=Label("Keep your eyes open longer than your opponent.",home,Vector2.zero,Vector2.one,23,Color.white);
+            namePrompt=Label("YOUR ARENA NAME",home,Vector2.zero,Vector2.one,19,Cyan,true);
+            playerName=NameField(home);playerName.SetTextWithoutNotify(session.HasPlayerName?session.PlayerName:"");
+            playerName.onValueChanged.AddListener(value=>entryError="");
+            playerName.onEndEdit.AddListener(value=>playerName.SetTextWithoutNotify(StarePlayerName.Clean(value)));
+            homeHint=Label("Camera on. Face in view.\nFirst blink loses.",home,Vector2.zero,Vector2.one,21,Muted);
+            practice=ButtonElement("Practice with bots",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("practice"),true);
+            host=ButtonElement("Create room",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("host"));
+            var field=Box("Four digit room code",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
+            code=field.gameObject.AddComponent<InputField>();code.characterLimit=StareRelayNetwork.CodeLength;code.contentType=InputField.ContentType.IntegerNumber;code.keyboardType=TouchScreenKeyboardType.NumberPad;
+            var value=Label("",field,new Vector2(14,-8),new Vector2(200,50),27,Color.white,true);var placeholder=Label("Room code",field,new Vector2(14,-8),new Vector2(200,50),23,Muted);
+            code.textComponent=value;code.placeholder=placeholder;code.targetGraphic=field.GetComponent<Image>();
+            join=ButtonElement("Join",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("join"),true);
+            homeStatus=Label("Enter your name to continue.",home,Vector2.zero,Vector2.one,19,Muted);
         }
-
         void BuildRoom()
         {
-            roomBar = Box("Room toolbar", safe, new Vector2(0, 1), new Vector2(26, -22), new Vector2(770, 88), new Vector2(0, 1), Ink);
-            roomLabel = Label("", roomBar, new Vector2(18, -12), new Vector2(308, 33), 27, Color.white, true);
-            roomStatus = Label("", roomBar, new Vector2(18, -49), new Vector2(176, 28), 18, Muted);
-            editPlayerName = ButtonElement("Your name", roomBar, new Vector2(198, -48), new Vector2(164, 28), () => ShowNameEditor(true));
-            nameButtonLabel = editPlayerName.GetComponentInChildren<Text>();nameButtonLabel.fontSize=14;nameButtonLabel.resizeTextForBestFit=true;nameButtonLabel.resizeTextMinSize=10;nameButtonLabel.resizeTextMaxSize=14;
-            fill = ButtonElement("Bots: on", roomBar, new Vector2(384, -18), new Vector2(135, 52), () => session.Act("bot-fill"));
-            fillLabel = fill.GetComponentInChildren<Text>();
-            start = ButtonElement("Start", roomBar, new Vector2(530, -18), new Vector2(102, 52), () => session.StartMatch(), true);
-            startLabel = start.GetComponentInChildren<Text>();
-            leave = ButtonElement("Leave", roomBar, new Vector2(643, -18), new Vector2(106, 52), () => session.Leave());
-            var center = Box("Match caption", safe, new Vector2(.5f, 1), new Vector2(0, -125), new Vector2(590, 60), new Vector2(.5f, 1), Ink);
-            caption = Label("", center, new Vector2(12, -9), new Vector2(566, 42), 27, Color.white, true, TextAnchor.MiddleCenter);
-            voicePanel=Box("Room microphone",safe,new Vector2(0,1),new Vector2(26,-118),new Vector2(400,83),new Vector2(0,1),Ink);
-            mic=ButtonElement("Mic: On",voicePanel,new Vector2(12,-12),new Vector2(112,58),()=>session.Act("mic"));micButtonLabel=mic.GetComponentInChildren<Text>();micButtonLabel.fontSize=17;
-            voiceStatus=Label("Connecting voice…",voicePanel,new Vector2(137,-12),new Vector2(249,59),15,Muted);voicePanel.gameObject.SetActive(false);
+            roomBar=Box("Room toolbar",safe,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            roomLabel=Label("",roomBar,Vector2.zero,Vector2.one,28,Color.white,true);roomStatus=Label("",roomBar,Vector2.zero,Vector2.one,18,Muted);
+            editPlayerName=ButtonElement("Your name",roomBar,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));nameButtonLabel=editPlayerName.GetComponentInChildren<Text>();Fit(nameButtonLabel,15,21);
+            fill=ButtonElement("Bots: on",roomBar,Vector2.zero,Vector2.one,()=>session.Act("bot-fill"));fillLabel=fill.GetComponentInChildren<Text>();
+            start=ButtonElement("Start match",roomBar,Vector2.zero,Vector2.one,()=>session.StartMatch(),true);startLabel=start.GetComponentInChildren<Text>();Fit(startLabel,16,23);
+            leave=ButtonElement("Leave",roomBar,Vector2.zero,Vector2.one,()=>session.Leave());
+            captionPanel=Box("Match caption",safe,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);caption=Label("",captionPanel,Vector2.zero,Vector2.one,25,Color.white,true,TextAnchor.MiddleCenter);
         }
-
-        InputField NameField(Transform parent,Vector2 position,Vector2 size)
+        void BuildCamera()
         {
-            var field=Box("Player name",parent,new Vector2(0,1),position,size,new Vector2(0,1),Surface);
-            var input=field.gameObject.AddComponent<InputField>();input.characterLimit=StarePlayerName.MaxLength;input.contentType=InputField.ContentType.Standard;input.lineType=InputField.LineType.SingleLine;input.keyboardType=TouchScreenKeyboardType.Default;
-            var value=Label("",field,new Vector2(16,-7),new Vector2(size.x-32,size.y-12),25,Color.white,true);
-            var placeholder=Label("Your name",field,new Vector2(16,-7),new Vector2(size.x-32,size.y-12),23,Muted);
-            input.textComponent=value;input.placeholder=placeholder;input.targetGraphic=field.GetComponent<Image>();input.SetTextWithoutNotify(StarePlayerName.Saved);
-            input.onValidateInput=(text,index,character)=>StarePlayerName.InputCharacter(character)&&!char.IsControl(character)?character:'\0';
-            return input;
+            cameraPanel=Box("Front camera",safe,Vector2.one,Vector2.zero,Vector2.one,Vector2.one,Ink);
+            cameraTag=Label("FRONT CAMERA",cameraPanel,Vector2.zero,Vector2.one,14,Cyan,true);
+            cameraFrame=Box("Camera frame",cameraPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
+            var image=LayoutRect("Front facing preview",cameraFrame,Vector2.zero,Vector2.one,new Vector2(3,3),new Vector2(-3,-3));
+            preview=image.gameObject.AddComponent<RawImage>();preview.raycastTarget=false;
+            // Preview pixels are upright and unmirrored. Only this LOCAL display
+            // mirrors horizontally; the transmitted camera head stays canonical.
+            preview.uvRect=new Rect(1,0,-1,1);
+            image.gameObject.AddComponent<AspectRatioFitter>().aspectMode=AspectRatioFitter.AspectMode.FitInParent;
+            cameraStatus=Label("Camera is off",cameraPanel,Vector2.zero,Vector2.one,16,Color.white);
+            cameraPrivacy=Label("Preview only",cameraPanel,Vector2.zero,Vector2.one,13,Muted);
+            cameraToggle=ButtonElement("Enable camera",cameraPanel,Vector2.zero,Vector2.one,()=>session.Act("camera"),true);cameraToggleLabel=cameraToggle.GetComponentInChildren<Text>();Fit(cameraToggleLabel,15,19);
         }
-        void SaveHomeName(){session.SetPlayerName(playerName.text);playerName.SetTextWithoutNotify(session.PlayerName);}
+        void BuildControls()
+        {
+            var pad=Box("Movement joystick",safe,Vector2.zero,Vector2.zero,new Vector2(144,144),Vector2.zero,new Color(.05f,.12f,.18f,.80f));
+            var knob=Box("Joystick thumb",pad,new Vector2(.5f,.5f),Vector2.zero,new Vector2(58,58),new Vector2(.5f,.5f),Cyan);knob.GetComponent<Image>().raycastTarget=false;
+            joystick=pad.gameObject.AddComponent<StareMobileJoystick>();joystick.Initialize(session,knob,49);
+            movementHint=Label("",safe,Vector2.zero,Vector2.one,17,Color.white);lookHint=Label("Swipe to look",safe,Vector2.zero,Vector2.one,17,Muted,false,TextAnchor.MiddleRight);
+            dance=ButtonElement("Dance",safe,Vector2.zero,new Vector2(144,64),()=>dancePicker.gameObject.SetActive(!dancePicker.gameObject.activeSelf));
+            dancePicker=Box("Quick dances",safe,new Vector2(1,0),Vector2.zero,new Vector2(238,300),new Vector2(1,0),Ink);
+            string[] options={"Hip hop","Charleston","Lindy hop","Fancy footwork","Stop dancing"};
+            for(int index=0;index<options.Length;index++){int choice=index==4?-1:index;var button=ButtonElement(options[index],dancePicker,new Vector2(10,-10-index*57),new Vector2(218,49),()=>{session.Act("dance:"+choice);dancePicker.gameObject.SetActive(false);});Fit(button.GetComponentInChildren<Text>(),17,21);}
+            dancePicker.gameObject.SetActive(false);
+        }
+        void BuildModals()
+        {
+            scrim=Box("Modal backdrop",safe,Vector2.zero,Vector2.zero,Vector2.one,Vector2.zero,new Color(.006f,.012f,.025f,.76f));scrim.anchorMin=Vector2.zero;scrim.anchorMax=Vector2.one;scrim.offsetMin=scrim.offsetMax=Vector2.zero;scrim.gameObject.SetActive(false);
+            BuildSettings();BuildNameEditor();
+        }
+        void BuildSettings()
+        {
+            settingsPanel=Box("Phone settings",safe,new Vector2(.5f,1),Vector2.zero,Vector2.one,new Vector2(.5f,1),Ink);
+            settingsPanel.GetComponent<Image>().color=new Color(Ink.r,Ink.g,Ink.b,1);
+            Label("Settings",settingsPanel,new Vector2(20,-18),new Vector2(300,40),30,Color.white,true);
+            settingsDone=ButtonElement("Done",settingsPanel,Vector2.zero,new Vector2(96,50),()=>ShowSettings(false));
+            musicLabel=Label("Music",settingsPanel,Vector2.zero,Vector2.one,24,Color.white,true);
+            musicToggle=ButtonElement("Music on",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetMusicEnabled(!session.MusicEnabled));
+            musicPercent=Label("",settingsPanel,Vector2.zero,Vector2.one,18,Muted,false,TextAnchor.MiddleRight);
+            musicVolume=BuildSlider(settingsPanel);musicVolume.onValueChanged.AddListener(value=>{if(!syncingMusic)session.SetMusicVolume(value);});
+            mic=ButtonElement("Enable mic",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("mic"));micLabel=mic.GetComponentInChildren<Text>();Fit(micLabel,16,22);
+            voiceToggle=ButtonElement("Voice on",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("voice"));voiceLabel=voiceToggle.GetComponentInChildren<Text>();
+            voiceStatus=Label("",settingsPanel,Vector2.zero,Vector2.one,17,Muted);
+            portraitChoice=ButtonElement("Portrait",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetLandscapeMode(false));landscapeChoice=ButtonElement("Landscape",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetLandscapeMode(true));
+            calibrate=ButtonElement("Enable camera",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act(session.MobileCamera!=null&&session.MobileCamera.Running?"calibrate":"camera"),true);
+            calibrationStatus=Label("",settingsPanel,Vector2.zero,Vector2.one,18,Muted);
+            settingsName=ButtonElement("Edit your name",settingsPanel,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));settingsLeave=ButtonElement("Leave room",settingsPanel,Vector2.zero,Vector2.one,()=>{ShowSettings(false);session.Leave();});
+        }
         void BuildNameEditor()
         {
-            nameEditor=Box("Edit player name",safe,new Vector2(.5f,1),new Vector2(0,-210),new Vector2(480,206),new Vector2(.5f,1),Ink);
-            Label("Your name",nameEditor,new Vector2(24,-17),new Vector2(432,32),27,Color.white,true);
-            nameEditorInput=NameField(nameEditor,new Vector2(24,-64),new Vector2(432,54));
-            Label("Shown above your avatar",nameEditor,new Vector2(24,-119),new Vector2(432,22),15,Muted);
-            ButtonElement("Cancel",nameEditor,new Vector2(24,-153),new Vector2(205,40),()=>ShowNameEditor(false)).GetComponentInChildren<Text>().fontSize=19;
-            ButtonElement("Save name",nameEditor,new Vector2(242,-153),new Vector2(214,40),()=>{session.SetPlayerName(nameEditorInput.text);playerName.SetTextWithoutNotify(session.PlayerName);ShowNameEditor(false);},true).GetComponentInChildren<Text>().fontSize=19;
-            nameEditor.gameObject.SetActive(false);
+            nameEditor=Box("Review player name",safe,new Vector2(.5f,1),Vector2.zero,Vector2.one,new Vector2(.5f,1),Ink);
+            nameEditor.GetComponent<Image>().color=new Color(Ink.r,Ink.g,Ink.b,1);
+            nameTitle=Label("Your arena name",nameEditor,Vector2.zero,Vector2.one,28,Color.white,true);
+            nameEditorInput=NameField(nameEditor);nameEditorInput.onValueChanged.AddListener(value=>nameError.text="");
+            nameHint=Label("Everyone in the room will see this name.",nameEditor,Vector2.zero,Vector2.one,19,Muted);
+            nameError=Label("",nameEditor,Vector2.zero,Vector2.one,18,new Color(1,.65f,.43f));
+            nameCancel=ButtonElement("Cancel",nameEditor,Vector2.zero,Vector2.one,()=>ShowNameEditor(false));nameConfirm=ButtonElement("Save name",nameEditor,Vector2.zero,Vector2.one,ConfirmName,true);
+            settingsPanel.gameObject.SetActive(false);nameEditor.gameObject.SetActive(false);
+        }
+        InputField NameField(Transform parent)
+        {
+            var field=Box("Player name",parent,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
+            var input=field.gameObject.AddComponent<InputField>();input.characterLimit=StarePlayerName.MaxLength;input.contentType=InputField.ContentType.Standard;input.lineType=InputField.LineType.SingleLine;input.keyboardType=TouchScreenKeyboardType.Default;
+            var value=Label("",field,new Vector2(14,-8),new Vector2(350,48),25,Color.white,true);var placeholder=Label("Your name",field,new Vector2(14,-8),new Vector2(350,48),23,Muted);
+            input.textComponent=value;input.placeholder=placeholder;input.targetGraphic=field.GetComponent<Image>();
+            input.onValidateInput=(text,index,character)=>StarePlayerName.InputCharacter(character)&&!char.IsControl(character)?character:'\0';return input;
+        }
+        Slider BuildSlider(Transform parent)
+        {
+            var node=LayoutRect("Music volume",parent,new Vector2(0,1),new Vector2(0,1),Vector2.zero,Vector2.zero);node.pivot=new Vector2(0,1);
+            node.gameObject.AddComponent<Image>().color=Color.clear;
+            var slider=node.gameObject.AddComponent<Slider>();slider.minValue=0;slider.maxValue=1;
+            var track=Box("Volume track",node,new Vector2(0,.5f),Vector2.zero,new Vector2(300,8),new Vector2(0,.5f),Surface);track.anchorMin=new Vector2(0,.5f);track.anchorMax=new Vector2(1,.5f);track.offsetMin=new Vector2(0,-4);track.offsetMax=new Vector2(0,4);
+            var fillArea=LayoutRect("Volume fill area",node,new Vector2(0,.5f),new Vector2(1,.5f),new Vector2(0,-4),new Vector2(0,4));
+            var fillRect=Box("Volume fill",fillArea,Vector2.zero,Vector2.zero,Vector2.one,Vector2.zero,Cyan);fillRect.anchorMin=Vector2.zero;fillRect.anchorMax=Vector2.one;fillRect.offsetMin=fillRect.offsetMax=Vector2.zero;slider.fillRect=fillRect;
+            var handleArea=LayoutRect("Volume handle area",node,new Vector2(0,.5f),new Vector2(1,.5f),new Vector2(14,-19),new Vector2(-14,19));
+            var handle=Box("Volume thumb",handleArea,new Vector2(.5f,.5f),Vector2.zero,new Vector2(28,0),new Vector2(.5f,.5f),Cyan);slider.handleRect=handle;slider.targetGraphic=handle.GetComponent<Image>();slider.direction=Slider.Direction.LeftToRight;
+            return slider;
+        }
+        public void RequestEntryForReview(string action)
+        {
+            if(action!="practice"&&action!="host"&&action!="join"||session.Busy||session.Connected)return;
+            if(!StarePlayerName.IsValid(playerName.text)){entryError="Enter your name to continue.";playerName.ActivateInputField();return;}
+            if(action=="join"&&!StareRelayNetwork.ValidCode(code.text)){entryError="Enter a 4-digit room code.";return;}
+            string value=StarePlayerName.Clean(playerName.text);session.SetPlayerName(value);
+            if(!session.HasPlayerName||session.PlayerName!=value){entryError="Your name could not be saved. Please try again.";return;}
+            playerName.SetTextWithoutNotify(value);playerName.DeactivateInputField();
+            if(action=="practice")session.Practice();else if(action=="host")session.Host();else session.Join(StareRelayNetwork.NormalizeCode(code.text));
         }
         public void ShowNameEditor(bool shown)
         {
-            if(nameEditor==null)return;
-            if(shown){nameEditorInput.SetTextWithoutNotify(session.PlayerName);joystick?.Release();lookPad?.Release();}
-            else nameEditorInput.DeactivateInputField();
-            nameEditor.gameObject.SetActive(shown);
+            if(!shown){nameEditorInput.DeactivateInputField();nameEditor.gameObject.SetActive(false);pendingEntry="";pendingCode="";UpdateModal();return;}
+            if(session.Connected&&session.State.phase!=(int)MatchPhase.Lobby)return;
+            OpenNameEditor(session.HasPlayerName?session.PlayerName:playerName.text,"");
         }
-
-        void BuildCamera()
+        void OpenNameEditor(string value,string action)
         {
-            cameraPanel = Box("Front camera", safe, Vector2.one, new Vector2(-26, -22), new Vector2(300, 365), Vector2.one, Ink);
-            cameraTag = Label("FRONT CAMERA", cameraPanel, new Vector2(16, -11), new Vector2(268, 29), 18, Cyan, true);
-            var frame = Box("Camera frame", cameraPanel, new Vector2(0, 1), new Vector2(14, -46), new Vector2(272, 155), new Vector2(0, 1), Surface);
-            var imageRect = LayoutRect("Front facing preview", frame, Vector2.zero, Vector2.one, new Vector2(3, 3), new Vector2(-3, -3));
-            preview = imageRect.gameObject.AddComponent<RawImage>(); preview.color = Color.white; preview.raycastTarget = false;
-            // Camera processing supplies a corrected upright texture; preserve its aspect ratio.
-            imageRect.gameObject.AddComponent<AspectRatioFitter>().aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-            cameraStatus = Label("Camera is off", cameraPanel, new Vector2(16, -209), new Vector2(268, 59), 18, Color.white);
-            cameraPrivacy = Label("Preview only. Enable to detect blinks.", cameraPanel, new Vector2(16, -273), new Vector2(268, 35), 15, Muted);
-            cameraToggle = ButtonElement("Enable camera", cameraPanel, new Vector2(14, -318), new Vector2(174, 34), () => session.Act("camera"), true);
-            cameraToggleLabel = cameraToggle.GetComponentInChildren<Text>(); cameraToggleLabel.fontSize = 17;
-            calibrate = ButtonElement("Reset", cameraPanel, new Vector2(198, -318), new Vector2(88, 34), () => session.Act("calibrate"));
-            calibrate.GetComponentInChildren<Text>().fontSize = 17;
+            settingsPanel.gameObject.SetActive(false);pendingEntry=action;nameEditorInput.SetTextWithoutNotify(value);nameError.text="";
+            nameTitle.text=action.Length>0?"Enter as this name?":"Your arena name";
+            nameHint.text="Everyone in the room will see this name.";
+            nameConfirm.GetComponentInChildren<Text>().text=action=="join"?"Join room":action=="host"?"Create room":action=="practice"?"Start practice":"Save name";
+            nameEditor.gameObject.SetActive(true);PauseTouches();UpdateModal();
         }
-
-        void BuildControls()
+        public void ConfirmName()
         {
-            var pad = Box("Movement joystick", safe, Vector2.zero, new Vector2(76, 63), new Vector2(166, 166), new Vector2(0, 0), new Color(.07f, .15f, .21f, .75f));
-            var knob = Box("Joystick thumb", pad, new Vector2(.5f, .5f), Vector2.zero, new Vector2(64, 64), new Vector2(.5f, .5f), Cyan);
-            knob.GetComponent<Image>().raycastTarget = false;
-            joystick = pad.gameObject.AddComponent<StareMobileJoystick>(); joystick.Initialize(session, knob, 59);
-            movementHint = Label("", safe, new Vector2(27, -10), new Vector2(490, 34), 18, Color.white);
-            movementHint.rectTransform.anchorMin = movementHint.rectTransform.anchorMax = Vector2.zero;
-            movementHint.rectTransform.pivot = Vector2.zero; movementHint.rectTransform.anchoredPosition = new Vector2(29, 16);
-            dance = ButtonElement("Dance", safe, new Vector2(-28, 23), new Vector2(156, 55), () => dancePicker.gameObject.SetActive(!dancePicker.gameObject.activeSelf));
-            var rect = dance.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = new Vector2(1, 0); rect.pivot = new Vector2(1, 0);
-            dancePicker = Box("Quick dances", safe, new Vector2(1, 0), new Vector2(-28, 92), new Vector2(262, 265), new Vector2(1, 0), Ink);
-            string[] options = { "Hip hop", "Charleston", "Lindy hop", "Fancy footwork", "Stop dancing" };
-            for (int i = 0; i < options.Length; i++)
-            {
-                int choice = i == 4 ? -1 : i;
-                var button = ButtonElement(options[i], dancePicker, new Vector2(12, -12 - i * 49), new Vector2(238, 41), () => { session.Act("dance:" + choice); dancePicker.gameObject.SetActive(false); });
-                button.GetComponentInChildren<Text>().fontSize = 20;
-            }
-            dancePicker.gameObject.SetActive(false);
-            lookHint = Label("Swipe the arena to look", safe, new Vector2(-465, 25), new Vector2(270, 34), 18, Muted, false, TextAnchor.MiddleRight);
-            var hint = lookHint.rectTransform; hint.anchorMin = hint.anchorMax = new Vector2(1, 0); hint.pivot = Vector2.zero;
+            string value=StarePlayerName.Clean(nameEditorInput.text);
+            if(!StarePlayerName.IsValid(value)){nameError.text="Choose a name with at least one letter or number.";return;}
+            session.SetPlayerName(value);
+            if(!session.HasPlayerName||session.PlayerName!=value){nameError.text="Your name could not be saved. Please try again.";return;}
+            string action=pendingEntry,room=pendingCode;playerName.SetTextWithoutNotify(value);ShowNameEditor(false);
+            if(action=="practice")session.Practice();else if(action=="host")session.Host();else if(action=="join")session.Join(room);
         }
+        public void ShowSettings(bool shown)
+        {
+            if(shown){ShowNameEditor(false);PauseTouches();}
+            settingsPanel.gameObject.SetActive(shown);UpdateModal();
+        }
+        void PauseTouches(){joystick?.Release();lookPad?.Release();if(dancePicker!=null)dancePicker.gameObject.SetActive(false);}
+        void UpdateModal(){scrim.gameObject.SetActive(SettingsVisible||NameEditorVisible);settingsButton.transform.SetAsLastSibling();}
 
         void Update()
         {
-            if (session == null || canvas == null) return;
-            UpdateSafeArea();
-            bool connected = session.Connected;
-            home.gameObject.SetActive(!connected); roomBar.gameObject.SetActive(connected);
-            homeStatus.text = string.IsNullOrEmpty(session.Status) ? "4 digits · play together from any Wi-Fi" : session.Status;
-            bool naming=NameEditorVisible;
-            lookPad.gameObject.SetActive(connected&&!naming);
-            lookHint.gameObject.SetActive(connected);
-            joystick.gameObject.SetActive(connected && session.CanMove&&!naming);
-            dance.gameObject.SetActive(connected); dance.interactable = session.CanDance;
-            if (!connected || !session.CanDance) dancePicker.gameObject.SetActive(false);
-            practice.interactable = host.interactable = !session.Busy;
-            join.interactable = !session.Busy && StareRelayNetwork.ValidCode(code.text);
-            leave.interactable = !session.Busy;
-            var state = session.State ?? new ArenaState();
-            bool lobby = state.phase == (int)MatchPhase.Lobby;
-            editPlayerName.gameObject.SetActive(lobby);nameButtonLabel.text="Name: "+session.PlayerName;
-            if(!connected||!lobby){ShowNameEditor(false);}
-            voicePanel.gameObject.SetActive(connected&&!string.IsNullOrEmpty(session.RoomCode));
-            var voice=session.Voice;
-            mic.interactable=voice!=null&&session.Connected;
-            micButtonLabel.text=voice==null?"Mic":!voice.MicPermissionGranted?"Enable mic":voice.MicMuted?"Unmute":"Mute mic\n"+new string('|',Mathf.RoundToInt(voice.LocalMouth*6));
-            voiceStatus.text=voice!=null?voice.Status:"Connecting proximity voice…";
-            roomLabel.text = string.IsNullOrEmpty(session.RoomCode) ? "PRACTICE" : "ROOM " + session.RoomCode;
-            roomStatus.text = session.Busy ? session.Status : state.fighters.Count(f => !f.bot) + " players · " + state.fighters.Count(f => f.bot) + " bots";
-            start.gameObject.SetActive(session.Hosting && (lobby || state.phase == (int)MatchPhase.Champion));
-            start.interactable = !session.Busy && state.fighters.Length >= 2 && state.fighters.All(f => f.ready && f.valid);
-            startLabel.text = state.phase == (int)MatchPhase.Champion ? "Again" : "Start";
-            fill.gameObject.SetActive(session.Hosting && lobby); fill.interactable = !session.Busy;
-            fillLabel.text = state.botFill ? "Bots: on" : "Humans only";
-            var local = state.fighters.FirstOrDefault(f => f.id == session.LocalId);
-            caption.text = MatchCaption(state, local, session.Status);
-            caption.transform.parent.gameObject.SetActive(connected && !string.IsNullOrEmpty(caption.text));
-            movementHint.text = !connected ? "" : session.CanMove ? (local != null && !local.alive ? "Move outside the competitor fields" : "Left thumb to move") : "Your position is held during the stare";
-            var camera = session.MobileCamera;
-            bool running = camera != null && camera.Running;
-            bool live = running && connected && !string.IsNullOrEmpty(session.RoomCode);
-            cameraTag.text = live ? "● LIVE · FRONT CAMERA" : running ? "FRONT CAMERA · PREVIEW" : "FRONT CAMERA";
-            cameraStatus.text = camera != null ? camera.Status : "Camera unavailable on this device";
-            cameraPrivacy.text = live ? "Your camera is live in this room." : running ? "Preview only until you join a room." : "Enable camera to detect your blinks.";
-            cameraToggleLabel.text = running ? "Camera off" : "Enable camera";
-            calibrate.interactable = running;
-            preview.texture = camera != null ? camera.Preview : null;
-            preview.enabled = running && preview.texture != null;
-            if (preview.texture != null) preview.GetComponent<AspectRatioFitter>().aspectRatio = (float)preview.texture.width / Mathf.Max(1, preview.texture.height);
+            if(session==null||canvas==null)return;UpdateSafeArea();
+            bool connected=session.Connected;var state=session.State??new ArenaState();bool lobby=state.phase==(int)MatchPhase.Lobby;
+            if(connected&&!lobby&&NameEditorVisible)ShowNameEditor(false);
+            if(!layoutReady||connected!=lastConnected||lobby!=lastLobby||session.Hosting!=lastHosting)ApplyLayout(layoutSize.x,layoutSize.y,portrait,connected,lobby,session.Hosting);
+            home.gameObject.SetActive(!connected);brand.gameObject.SetActive(!connected);brandTag.gameObject.SetActive(!connected);roomBar.gameObject.SetActive(connected);
+            bool modal=SettingsVisible||NameEditorVisible;
+            lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(connected&&!modal);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
+            dance.gameObject.SetActive(connected&&!modal);dance.interactable=session.CanDance;
+            if(!connected||!session.CanDance||modal)dancePicker.gameObject.SetActive(false);
+            bool validDraft=StarePlayerName.IsValid(playerName.text);
+            practice.interactable=host.interactable=!session.Busy&&validDraft;join.interactable=!session.Busy&&validDraft&&StareRelayNetwork.ValidCode(code.text);
+            homeStatus.text=entryError.Length>0?entryError:!validDraft?"Enter your name to continue.":session.Status;
+            leave.interactable=!session.Busy;editPlayerName.gameObject.SetActive(lobby);nameButtonLabel.text=session.PlayerName;
+            roomLabel.text=string.IsNullOrEmpty(session.RoomCode)?"PRACTICE":"ROOM "+session.RoomCode;
+            roomStatus.text=state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots";
+            fill.gameObject.SetActive(session.Hosting&&lobby);fill.interactable=!session.Busy;fillLabel.text=state.botFill?"Humans + bots":"Humans only";
+            var mobileCamera=session.MobileCamera;bool running=mobileCamera!=null&&mobileCamera.Running;
+            bool localReady=running&&mobileCamera.Valid&&mobileCamera.Ready;
+            bool rosterReady=state.fighters.Length>=2&&state.fighters.All(f=>f.bot||f.ready&&f.valid);
+            start.gameObject.SetActive(session.Hosting&&lobby);start.interactable=!session.Busy&&session.HasPlayerName&&localReady&&rosterReady;
+            startLabel.text=!running?"Enable camera":!localReady?"Calibrate first":!rosterReady?"Waiting for players":"Start match";
+            var local=state.fighters.FirstOrDefault(f=>f.id==session.LocalId);
+            caption.text=MatchCaption(state,local,session.Status);captionPanel.gameObject.SetActive(connected&&!modal&&!string.IsNullOrEmpty(caption.text));
+            movementHint.gameObject.SetActive(connected&&!modal);movementHint.text=session.CanMove?(local!=null&&!local.alive?"Move outside the fields":"Left thumb to move"):"Your position is held during the stare";
+            bool live=running&&connected&&!string.IsNullOrEmpty(session.RoomCode);
+            cameraTag.text=live?"LIVE · FRONT CAMERA":"FRONT CAMERA";
+            cameraStatus.text=mobileCamera!=null?mobileCamera.Status:"Camera unavailable";
+            cameraPrivacy.text=live?"Shared in this room":"Preview only";
+            cameraToggleLabel.text=running?"Camera off":"Enable camera";
+            preview.texture=mobileCamera!=null?mobileCamera.Preview:null;preview.enabled=running&&preview.texture!=null;
+            if(preview.texture!=null)preview.GetComponent<AspectRatioFitter>().aspectRatio=(float)preview.texture.width/Mathf.Max(1,preview.texture.height);
+            musicToggle.GetComponentInChildren<Text>().text=session.MusicEnabled?"Music on":"Music off";Selected(musicToggle,session.MusicEnabled);
+            musicPercent.text=Mathf.RoundToInt(session.MusicVolume*100)+"%";syncingMusic=true;musicVolume.SetValueWithoutNotify(session.MusicVolume);syncingMusic=false;
+            var voice=session.Voice;mic.interactable=voiceToggle.interactable=voice!=null;
+            micLabel.text=voice==null?"Microphone":!voice.MicPermissionGranted?"Enable mic":voice.MicMuted?"Unmute mic":"Mute mic";
+            voiceLabel.text=voice!=null&&voice.VoiceEnabled?"Voice on":"Voice off";voiceStatus.text=voice!=null?voice.Status:"Join an online room for proximity chat.";
+            portraitChoice.GetComponentInChildren<Text>().text="Portrait";landscapeChoice.GetComponentInChildren<Text>().text="Landscape";Selected(portraitChoice,!session.LandscapeMode);Selected(landscapeChoice,session.LandscapeMode);
+            calibrate.GetComponentInChildren<Text>().text=running?"Calibrate eyes":"Enable camera";
+            calibrationStatus.text=mobileCamera==null?"Front-camera tracking unavailable.":running?mobileCamera.Status+"\nKeep both eyes open and face the camera.":"Turn on your front camera to track blinks.";
+            settingsName.interactable=!connected||lobby;settingsLeave.gameObject.SetActive(connected);
+            nameConfirm.interactable=StarePlayerName.IsValid(nameEditorInput.text)&&!session.Busy;
         }
-
-        public static string MatchCaption(ArenaState state, Fighter local, string status)
+        public static string MatchCaption(ArenaState state,Fighter local,string status)
         {
-            if (state == null || local == null) return status ?? "";
-            if (state.phase == (int)MatchPhase.Champion)
-            {
-                var winner = state.fighters.FirstOrDefault(f => f.id == state.winner);
-                return state.winner == local.id ? "You are the champion!" : (winner != null ? winner.name + " wins!" : "Match complete");
-            }
-            if (!local.alive) return local.status!=null&&local.status.StartsWith("FACE LOST")?"Face left camera · you're out":"You're out · explore outside the fields";
-            bool active = local.pair >= 0 && local.pair < state.pairs.Length && state.pairs[local.pair].winner < 0;
-            if (active && state.trackingPaused) return "Tracking paused · look at your camera";
-            if (active && state.phase == (int)MatchPhase.Countdown) return "Blink now · starts in " + Mathf.CeilToInt(state.remaining);
-            if (active && state.phase == (int)MatchPhase.Duel) return !local.valid?"Face not visible · return now or you lose":"Keep your eyes open";
-            if (state.phase == (int)MatchPhase.Lobby) return !local.ready || !local.valid ? "Look forward with eyes open to calibrate" : "Ready · explore while the host prepares";
+            if(state==null||local==null)return status??"";
+            if(state.phase==(int)MatchPhase.Champion){var winner=state.fighters.FirstOrDefault(f=>f.id==state.winner);return state.winner==local.id?"You are the champion!":winner!=null?winner.name+" wins!":"Match complete";}
+            if(!local.alive)return local.status!=null&&local.status.StartsWith("FACE LOST")?"Face left camera · you're out":"You're out · explore outside the fields";
+            bool active=local.pair>=0&&local.pair<state.pairs.Length&&state.pairs[local.pair].winner<0;
+            if(active&&state.trackingPaused)return "Tracking paused · face your camera";
+            if(active&&state.phase==(int)MatchPhase.Countdown)return "Blink now · starts in "+Mathf.CeilToInt(state.remaining);
+            if(active&&state.phase==(int)MatchPhase.Duel)return !local.valid?"Face not visible · return now or you lose":"Keep your eyes open";
+            if(state.phase==(int)MatchPhase.Lobby)return !local.ready||!local.valid?"Eyes open · calibrate before the host starts":"Ready · explore while the host prepares";
             return "You advanced · next round soon";
         }
-
         void UpdateSafeArea()
         {
-            var screen = new Vector2(Screen.width, Screen.height); var inset = Screen.safeArea;
-            if (screen == lastScreen && inset == lastSafe) return;
-            lastScreen = screen; lastSafe = inset;
-            safe.anchorMin = new Vector2(inset.x / Mathf.Max(1, screen.x), inset.y / Mathf.Max(1, screen.y));
-            safe.anchorMax = new Vector2(inset.xMax / Mathf.Max(1, screen.x), inset.yMax / Mathf.Max(1, screen.y));
+            var pixels=new Vector2(Screen.width,Screen.height);var inset=Screen.safeArea;
+#if UNITY_EDITOR
+            if(reviewViewport){pixels=reviewPixels;inset=reviewSafe;}
+#endif
+            if(pixels==lastScreen&&inset==lastSafe&&layoutReady)return;lastScreen=pixels;lastSafe=inset;
+            portrait=pixels.y>=pixels.x;float scale=(portrait?pixels.x:pixels.y)/600f;
+            // Keep the complete entry/settings flow inside shorter tablet and
+            // split-screen safe areas as well as the normal iPhone layout.
+            scale=Mathf.Max(.01f,Mathf.Min(scale,inset.height/(portrait?900f:570f)));
+            scaler.uiScaleMode=CanvasScaler.ScaleMode.ConstantPixelSize;scaler.scaleFactor=scale;canvas.scaleFactor=scale;
+            safe.anchorMin=new Vector2(inset.x/Mathf.Max(1,pixels.x),inset.y/Mathf.Max(1,pixels.y));safe.anchorMax=new Vector2(inset.xMax/Mathf.Max(1,pixels.x),inset.yMax/Mathf.Max(1,pixels.y));
+            layoutSize=new Vector2(inset.width/scale,inset.height/scale);layoutReady=false;
+            ApplyLayout(layoutSize.x,layoutSize.y,portrait,session.Connected,session.State!=null&&session.State.phase==(int)MatchPhase.Lobby,session.Hosting);
         }
-
-        RectTransform LayoutRect(string name, Transform parent, Vector2 min, Vector2 max, Vector2 low, Vector2 high)
+#if UNITY_EDITOR
+        public void SetReviewViewport(Vector2 pixels,Rect safeArea)
+        {reviewViewport=pixels.x>0&&pixels.y>0;reviewPixels=pixels;reviewSafe=safeArea;lastScreen=new Vector2(-1,-1);UpdateSafeArea();Canvas.ForceUpdateCanvases();Update();}
+        public void ClearReviewViewport(){reviewViewport=false;lastScreen=new Vector2(-1,-1);UpdateSafeArea();Canvas.ForceUpdateCanvases();Update();}
+#endif
+        void ApplyLayout(float width,float height,bool tall,bool connected,bool lobby,bool hosting)
         {
-            var go = new GameObject(name, typeof(RectTransform)); go.transform.SetParent(parent, false);
-            var rect = go.GetComponent<RectTransform>(); rect.anchorMin = min; rect.anchorMax = max; rect.offsetMin = low; rect.offsetMax = high;
-            return rect;
-        }
-        RectTransform Box(string name, Transform parent, Vector2 anchor, Vector2 position, Vector2 size, Vector2 pivot, Color color)
-        {
-            var rect = LayoutRect(name, parent, anchor, anchor, Vector2.zero, Vector2.zero); rect.pivot = pivot; rect.sizeDelta = size; rect.anchoredPosition = position;
-            var image = rect.gameObject.AddComponent<Image>(); image.sprite = rounded; image.type = Image.Type.Sliced; image.color = color;
-            return rect;
-        }
-        Text Label(string content, Transform parent, Vector2 position, Vector2 size, int points, Color color, bool heavy = false, TextAnchor alignment = TextAnchor.UpperLeft)
-        {
-            var rect = LayoutRect(string.IsNullOrEmpty(content) ? "Label" : content, parent, new Vector2(0, 1), new Vector2(0, 1), Vector2.zero, Vector2.zero);
-            rect.pivot = new Vector2(0, 1); rect.anchoredPosition = position; rect.sizeDelta = size;
-            var text = rect.gameObject.AddComponent<Text>(); text.text = content; text.font = heavy ? bold : regular; text.fontSize = points;
-            text.color = color; text.alignment = alignment; text.raycastTarget = false; text.supportRichText = false;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap; text.verticalOverflow = VerticalWrapMode.Truncate; return text;
-        }
-        Button ButtonElement(string label, Transform parent, Vector2 position, Vector2 size, System.Action clicked, bool primary = false)
-        {
-            var rect = Box(label, parent, new Vector2(0, 1), position, size, new Vector2(0, 1), primary ? Cyan : Surface);
-            var button = rect.gameObject.AddComponent<Button>(); button.onClick.AddListener(() => clicked());
-            var colors = button.colors; colors.normalColor = Color.white; colors.highlightedColor = new Color(.8f, 1, 1); colors.pressedColor = new Color(.6f, .83f, .86f); colors.disabledColor = new Color(.5f, .5f, .5f, .6f); button.colors = colors;
-            button.navigation = new Navigation { mode = Navigation.Mode.None };
-            Label(label, rect, Vector2.zero, size, 24, primary ? Ink : Color.white, true, TextAnchor.MiddleCenter);
-            return button;
-        }
-        Sprite RoundedSprite()
-        {
-            const int width = 32; const float radius = 8;
-            var texture = new Texture2D(width, width, TextureFormat.RGBA32, false) { name = "Mobile rounded surface" };
-            var pixels = new Color[width * width];
-            for (int y = 0; y < width; y++) for (int x = 0; x < width; x++)
+            if(width<=0||height<=0)return;layoutReady=true;lastConnected=connected;lastLobby=lobby;lastHosting=hosting;
+            const float margin=16;
+            Place(settingsButton.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-margin,-12),new Vector2(160,70));
+            Put(brand,new Vector2(16,-13),new Vector2(width-190,36),30);Put(brandTag,new Vector2(18,-51),new Vector2(width-190,24),16);
+            float homeWidth=tall?width-32:Mathf.Min(408,width-282);float homeTop=tall?88:82;float homeHeight=tall?784:Mathf.Min(484,height-homeTop-12);
+            Place(home,new Vector2(0,1),new Vector2(0,1),new Vector2(margin,-homeTop),new Vector2(homeWidth,homeHeight));
+            float inner=homeWidth-40;
+            if(tall)
             {
-                var delta = new Vector2(Mathf.Max(radius - x - .5f, x + .5f - (width - radius)), Mathf.Max(radius - y - .5f, y + .5f - (width - radius)));
-                float edge = new Vector2(Mathf.Max(0, delta.x), Mathf.Max(0, delta.y)).magnitude - radius;
-                pixels[y * width + x] = new Color(1, 1, 1, Mathf.Clamp01(.5f - edge));
+                hero.text="Don't\nblink.";Put(hero,new Vector2(20,-18),new Vector2(homeWidth-228,110),44);Put(description,new Vector2(20,-140),new Vector2(homeWidth-228,118),22);
+                Put(namePrompt,new Vector2(20,-320),new Vector2(inner,24),19);FieldPlace(playerName,new Vector2(20,-352),new Vector2(inner,64));
+                Put(homeHint,new Vector2(20,-427),new Vector2(inner,48),19);PlaceButton(practice,20,484,inner,70,24);PlaceButton(host,20,566,inner,70,24);
+                FieldPlace(code,new Vector2(20,-648),new Vector2(inner-140,70));PlaceButton(join,homeWidth-146,648,126,70,24);Put(homeStatus,new Vector2(20,-731),new Vector2(inner,43),18);
             }
-            texture.SetPixels(pixels); texture.Apply();
-            return Sprite.Create(texture, new Rect(0, 0, width, width), Vector2.one * .5f, 100, 0, SpriteMeshType.FullRect, Vector4.one * radius);
+            else
+            {
+                hero.text="Don't blink.";Put(hero,new Vector2(20,-14),new Vector2(inner,44),30);Put(description,new Vector2(20,-61),new Vector2(inner,44),18);
+                Put(namePrompt,new Vector2(20,-109),new Vector2(inner,20),16);FieldPlace(playerName,new Vector2(20,-135),new Vector2(inner,52));
+                Put(homeHint,new Vector2(20,-199),new Vector2(inner,42),14);PlaceButton(practice,20,homeHeight-232,inner,54,21);PlaceButton(host,20,homeHeight-166,inner,54,21);
+                FieldPlace(code,new Vector2(20,-(homeHeight-100)),new Vector2(inner-122,54));PlaceButton(join,homeWidth-128,homeHeight-100,108,54,21);Put(homeStatus,new Vector2(20,-(homeHeight-38)),new Vector2(inner,28),16);
+            }
+            float cameraWidth=tall?188:218,cameraHeight=328;
+            Place(cameraPanel,Vector2.one,Vector2.one,new Vector2(-margin,tall?-100:-88),new Vector2(cameraWidth,cameraHeight));
+            Put(cameraTag,new Vector2(12,-10),new Vector2(cameraWidth-24,22),14);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-40),new Vector2(cameraWidth-24,136));
+            Put(cameraStatus,new Vector2(12,-184),new Vector2(cameraWidth-24,43),16);Put(cameraPrivacy,new Vector2(12,-229),new Vector2(cameraWidth-24,18),12);PlaceButton(cameraToggle,12,252,cameraWidth-24,64,17);
+            float roomWidth=tall?width-cameraWidth-48:Mathf.Min(width-194,780);float roomHeight=tall?(lobby?(hosting?306:164):100):84;
+            Place(roomBar,new Vector2(0,1),new Vector2(0,1),new Vector2(16,tall?-88:-12),new Vector2(roomWidth,roomHeight));
+            if(tall)
+            {
+                Put(roomLabel,new Vector2(14,-12),new Vector2(roomWidth-126,36),27);Put(roomStatus,new Vector2(14,-61),new Vector2(roomWidth-28,30),18);
+                PlaceButton(leave,roomWidth-108,12,94,48,19);PlaceButton(editPlayerName,14,104,roomWidth-28,48,20);PlaceButton(fill,14,164,roomWidth-28,54,21);PlaceButton(start,14,230,roomWidth-28,60,21);
+                float captionTop=lobby?440:218;
+                Place(captionPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-captionTop),new Vector2(lobby?width-32:roomWidth,lobby?70:124));
+            }
+            else
+            {
+                Put(roomLabel,new Vector2(14,-10),new Vector2(Mathf.Max(130,roomWidth-488),30),24);Put(roomStatus,new Vector2(14,-46),new Vector2(Mathf.Max(130,roomWidth-488),24),16);
+                float offset=roomWidth-452;PlaceButton(editPlayerName,offset,14,134,54,17);PlaceButton(fill,offset+146,14,116,54,17);PlaceButton(start,offset+274,14,100,54,17);PlaceButton(leave,offset+386,14,54,54,16);
+                float captionWidth=Mathf.Min(420,width-cameraWidth-68);Place(captionPanel,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(-30,-108),new Vector2(captionWidth,68));
+            }
+            StretchLabel(caption,12,8);Fit(caption,16,tall?24:22);
+            Place(joystick.GetComponent<RectTransform>(),Vector2.zero,Vector2.zero,new Vector2(28,52),new Vector2(144,144));
+            Place(dance.GetComponent<RectTransform>(),new Vector2(1,0),new Vector2(1,0),new Vector2(-20,48),new Vector2(134,60));
+            Place(dancePicker,new Vector2(1,0),new Vector2(1,0),new Vector2(-20,120),new Vector2(238,300));
+            Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,14),new Vector2(tall?width-40:width-350,30));
+            Place(lookHint.rectTransform,new Vector2(1,0),new Vector2(1,0),new Vector2(-174,59),new Vector2(tall?190:250,36));
+            LayoutSettings(width,height,tall);LayoutName(width,height,tall);
         }
-        void OnDisable() { joystick?.Release(); lookPad?.Release(); }
-        void OnDestroy() { if (rounded != null) { Destroy(rounded.texture); Destroy(rounded); } }
+        void LayoutSettings(float width,float height,bool tall)
+        {
+            float panelWidth=tall?width-32:Mathf.Min(800,width-32),panelHeight=tall?740:452;
+            float top=tall?84:Mathf.Max(76,(height-panelHeight)*.5f);
+            Place(settingsPanel,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(0,-top),new Vector2(panelWidth,panelHeight));
+            PlaceButton(settingsDone,panelWidth-110,14,90,64,20);
+            float inner=panelWidth-40;
+            if(tall)
+            {
+                Put(musicLabel,new Vector2(20,-84),new Vector2(inner-150,34),24);PlaceButton(musicToggle,panelWidth-154,76,134,54,20);
+                Place(musicVolume.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),new Vector2(24,-145),new Vector2(inner-68,50));Put(musicPercent,new Vector2(panelWidth-78,-152),new Vector2(56,30),18);
+                float half=(inner-12)*.5f;PlaceButton(mic,20,216,half,58,20);PlaceButton(voiceToggle,32+half,216,half,58,20);Put(voiceStatus,new Vector2(20,-287),new Vector2(inner,69),17);
+                PlaceButton(portraitChoice,20,376,half,62,22);PlaceButton(landscapeChoice,32+half,376,half,62,22);
+                PlaceButton(calibrate,20,462,inner,62,23);Put(calibrationStatus,new Vector2(20,-537),new Vector2(inner,62),18);
+                PlaceButton(settingsName,20,614,inner,50,21);PlaceButton(settingsLeave,20,678,inner,50,21);
+            }
+            else
+            {
+                float column=(inner-24)*.5f,right=44+column;
+                Put(musicLabel,new Vector2(20,-80),new Vector2(column-132,34),23);PlaceButton(musicToggle,20+column-124,72,124,52,19);
+                Place(musicVolume.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),new Vector2(24,-139),new Vector2(column-66,50));Put(musicPercent,new Vector2(20+column-53,-150),new Vector2(53,30),17);
+                float half=(column-10)*.5f;PlaceButton(mic,20,206,half,56,18);PlaceButton(voiceToggle,30+half,206,half,56,18);Put(voiceStatus,new Vector2(20,-276),new Vector2(column,77),16);PlaceButton(settingsName,20,370,column,56,20);
+                PlaceButton(portraitChoice,right,82,half,56,19);PlaceButton(landscapeChoice,right+half+10,82,half,56,19);
+                PlaceButton(calibrate,right,204,column,58,21);Put(calibrationStatus,new Vector2(right,-276),new Vector2(column,77),17);PlaceButton(settingsLeave,right,370,column,56,20);
+            }
+        }
+        void LayoutName(float width,float height,bool tall)
+        {
+            float panelWidth=Mathf.Min(520,width-32),panelHeight=324,top=tall?Mathf.Min(160,height*.16f):Mathf.Max(90,(height-panelHeight)*.5f);
+            Place(nameEditor,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(0,-top),new Vector2(panelWidth,panelHeight));
+            Put(nameTitle,new Vector2(20,-18),new Vector2(panelWidth-40,39),27);FieldPlace(nameEditorInput,new Vector2(20,-78),new Vector2(panelWidth-40,64));
+            Put(nameHint,new Vector2(20,-156),new Vector2(panelWidth-40,44),19);Put(nameError,new Vector2(20,-201),new Vector2(panelWidth-40,33),17);
+            float half=(panelWidth-52)*.5f;PlaceButton(nameCancel,20,246,half,60,22);PlaceButton(nameConfirm,32+half,246,half,60,22);
+        }
+        static void Place(RectTransform rect,Vector2 anchor,Vector2 pivot,Vector2 position,Vector2 size){rect.anchorMin=rect.anchorMax=anchor;rect.pivot=pivot;rect.sizeDelta=size;rect.anchoredPosition=position;}
+        void PlaceButton(Button button,float x,float down,float width,float height,int points){Place(button.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),new Vector2(x,-down),new Vector2(width,height));var label=button.GetComponentInChildren<Text>();StretchLabel(label,6,3);Fit(label,Mathf.Max(14,points-3),points);}
+        void Put(Text label,Vector2 position,Vector2 size,int points){Place(label.rectTransform,new Vector2(0,1),new Vector2(0,1),position,size);label.fontSize=points;}
+        void FieldPlace(InputField input,Vector2 position,Vector2 size){Place(input.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),position,size);StretchLabel(input.textComponent,14,8);if(input.placeholder!=null)StretchLabel(input.placeholder.GetComponent<Text>(),14,8);}
+        static void StretchLabel(Text label,float horizontal,float vertical){var rect=label.rectTransform;rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=new Vector2(horizontal,vertical);rect.offsetMax=new Vector2(-horizontal,-vertical);}
+        static void Fit(Text label,int minimum,int maximum){label.resizeTextForBestFit=true;label.resizeTextMinSize=minimum;label.resizeTextMaxSize=maximum;}
+        static void Selected(Button button,bool selected){var image=button.targetGraphic as Image;if(image!=null)image.color=selected?new Color(.12f,.35f,.39f):Surface;}
+        RectTransform LayoutRect(string name,Transform parent,Vector2 min,Vector2 max,Vector2 low,Vector2 high){var node=new GameObject(name,typeof(RectTransform));node.transform.SetParent(parent,false);var rect=node.GetComponent<RectTransform>();rect.anchorMin=min;rect.anchorMax=max;rect.offsetMin=low;rect.offsetMax=high;return rect;}
+        RectTransform Box(string name,Transform parent,Vector2 anchor,Vector2 position,Vector2 size,Vector2 pivot,Color color){var rect=LayoutRect(name,parent,anchor,anchor,Vector2.zero,Vector2.zero);rect.pivot=pivot;rect.sizeDelta=size;rect.anchoredPosition=position;var image=rect.gameObject.AddComponent<Image>();image.sprite=rounded;image.type=Image.Type.Sliced;image.color=color;return rect;}
+        Text Label(string value,Transform parent,Vector2 position,Vector2 size,int points,Color color,bool heavy=false,TextAnchor alignment=TextAnchor.UpperLeft){var rect=LayoutRect(string.IsNullOrEmpty(value)?"Label":value,parent,new Vector2(0,1),new Vector2(0,1),Vector2.zero,Vector2.zero);rect.pivot=new Vector2(0,1);rect.anchoredPosition=position;rect.sizeDelta=size;var text=rect.gameObject.AddComponent<Text>();text.text=value;text.font=heavy?bold:regular;text.fontSize=points;text.color=color;text.alignment=alignment;text.raycastTarget=false;text.supportRichText=false;text.horizontalOverflow=HorizontalWrapMode.Wrap;text.verticalOverflow=VerticalWrapMode.Truncate;return text;}
+        Button ButtonElement(string label,Transform parent,Vector2 position,Vector2 size,Action clicked,bool primary=false){var rect=Box(label,parent,new Vector2(0,1),position,size,new Vector2(0,1),primary?Cyan:Surface);var button=rect.gameObject.AddComponent<Button>();button.onClick.AddListener(()=>clicked());var colors=button.colors;colors.normalColor=Color.white;colors.highlightedColor=new Color(.8f,1,1);colors.pressedColor=new Color(.6f,.83f,.86f);colors.disabledColor=new Color(.5f,.5f,.5f,.6f);button.colors=colors;button.navigation=new Navigation{mode=Navigation.Mode.None};Label(label,rect,Vector2.zero,size,23,primary?Ink:Color.white,true,TextAnchor.MiddleCenter);return button;}
+        Sprite RoundedSprite(){const int width=32;const float radius=8;var texture=new Texture2D(width,width,TextureFormat.RGBA32,false){name="Mobile rounded surface"};var pixels=new Color[width*width];for(int y=0;y<width;y++)for(int x=0;x<width;x++){var delta=new Vector2(Mathf.Max(radius-x-.5f,x+.5f-(width-radius)),Mathf.Max(radius-y-.5f,y+.5f-(width-radius)));float edge=new Vector2(Mathf.Max(0,delta.x),Mathf.Max(0,delta.y)).magnitude-radius;pixels[y*width+x]=new Color(1,1,1,Mathf.Clamp01(.5f-edge));}texture.SetPixels(pixels);texture.Apply();return Sprite.Create(texture,new Rect(0,0,width,width),Vector2.one*.5f,100,0,SpriteMeshType.FullRect,Vector4.one*radius);}
+        void OnDisable(){PauseTouches();}
+        void OnDestroy(){if(rounded!=null){Destroy(rounded.texture);Destroy(rounded);}}
     }
 
     /// <summary>The first finger owns movement until release; another finger can independently look.</summary>

@@ -7,11 +7,14 @@ namespace Staredown
     public sealed class StareMobileBlink
     {
         public const double StaleAfter = .25;
+        public const double CalibrationSeconds = 1.5;
         public bool Valid { get; private set; }
         public bool Ready => Valid && calibrated;
         public int BlinkSequence { get; private set; }
         public float Left { get; private set; }
         public float Right { get; private set; }
+        public float CalibrationProgress => Ready ? 1 : !Valid || double.IsNaN(openStart) ? 0 :
+            (float)Math.Max(0, Math.Min(1, (lastCapture-openStart)/CalibrationSeconds));
         bool calibrated, armed;
         double lastCapture = double.NaN, lastReceived = double.NegativeInfinity;
         double openStart = double.NaN, closedStart = double.NaN;
@@ -40,7 +43,7 @@ namespace Staredown
             if (Left < .30f && Right < .30f)
             {
                 if (double.IsNaN(openStart)) openStart = captureTimestamp;
-                if (captureTimestamp - openStart >= 1.5) calibrated = true;
+                if (captureTimestamp - openStart >= CalibrationSeconds) calibrated = true;
                 armed = true; closedStart = double.NaN;
                 return false;
             }

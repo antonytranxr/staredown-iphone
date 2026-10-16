@@ -11,6 +11,8 @@ namespace Staredown
     {
         public const int FrameSize = 160, MaxFrameBytes = 5000;
         public const float StreamInterval = 1f / 6f;
+        // Canonical upright, unmirrored texture. Only the local HUD applies a
+        // single horizontal UV flip; other contestants receive the real view.
         public Texture Preview => preview;
         public float Left => blink.Left;
         public float Right => blink.Right;
@@ -20,8 +22,14 @@ namespace Staredown
         public bool Ready => Running && blink.Ready;
         public bool Running { get; private set; }
         public int BlinkSequence => blink.BlinkSequence;
-        public string Status => !Running ? status : !Valid ? "CAMERA LIVE / KEEP YOUR FACE IN VIEW" :
-            !Ready ? "EYES OPEN / CALIBRATING" : "LIVE / EYES TRACKED";
+        public float CalibrationProgress => Running ? blink.CalibrationProgress : 0;
+        public int CalibrationPercent => Mathf.RoundToInt(CalibrationProgress*100);
+        public string Status => !Running ? status : !Valid ? TrackingGuidance :
+            !Ready ? "KEEP EYES OPEN / "+CalibrationPercent+"%" : "READY / EYES TRACKED";
+        string TrackingGuidance => trackingReason == 2 ? "ONLY ONE FACE IN VIEW" :
+            trackingReason == 3 ? "SHOW BOTH EYES IN GOOD LIGHT" : trackingReason == 4 ? "FACE THE FRONT CAMERA" :
+            trackingReason == 5 ? "CAMERA INTERRUPTED / TRY AGAIN" : trackingReason == 6 ? "CAMERA DELAYED / HOLD STILL" :
+            "CAMERA LIVE / KEEP YOUR FACE IN VIEW";
         public event Action<byte[]> FrameReady;
 
         [Serializable] sealed class Sample
@@ -29,6 +37,7 @@ namespace Staredown
             public long sequence;
             public double timestamp, age;
             public bool valid;
+            public int reason;
             public float left, right, yaw, pitch;
         }
         readonly StareMobileBlink blink = new StareMobileBlink();
@@ -38,8 +47,8 @@ namespace Staredown
         Color32[] pixels, thumb;
         int[] argb;
         long sampleSequence, nativeFrameSequence;
-        float nextAnalysis, nextFrame, nextThermal;
-        int thermalLevel;
+        float nextAnalysis, nextFrame, nextThermal, nextOrientation;
+        int thermalLevel, trackingReason;
         Coroutine permission;
         bool testCapture;
         int generation;
@@ -50,6 +59,7 @@ namespace Staredown
         [DllImport("__Internal")][return: MarshalAs(UnmanagedType.I1)] static extern bool StareMobileIOSSupported();
         [DllImport("__Internal")][return: MarshalAs(UnmanagedType.I1)] static extern bool StareMobileIOSStart();
         [DllImport("__Internal")] static extern void StareMobileIOSStop();
+        [DllImport("__Internal")] static extern void StareMobileIOSRefreshOrientation();
         [DllImport("__Internal")] static extern IntPtr StareMobileIOSPollAfter(long sequence);
         [DllImport("__Internal")] static extern int StareMobileIOSThermalLevel();
         [DllImport("__Internal")] static extern IntPtr StareMobileIOSCopyFrameAfter(long previousSequence, out long sequence, out int length);
@@ -59,6 +69,13 @@ namespace Staredown
         // Keep detection at camera cadence; only the decorative video thumbnail
         // slows down under thermal pressure. Real blink timing is unchanged.
         float CurrentStreamInterval => thermalLevel >= 2 ? .25f : StreamInterval;
+        public void RefreshOrientation()
+        {
+            nextOrientation = Time.unscaledTime + .25f;
+#if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
+            StareMobileIOSRefreshOrientation();
+#endif
+        }
         public void StartCamera()
         {
             if (Running || permission != null) return;
@@ -122,7 +139,7 @@ namespace Staredown
         }
         public void Calibrate()
         {
-            blink.Reset(); Yaw = Pitch = 0;
+            blink.Reset(); Yaw = Pitch = 0; trackingReason = 1;
         }
         public void StopCamera()
         {
@@ -153,6 +170,7 @@ namespace Staredown
 #endif
             }
             if (!Running) return;
+            if (Time.unscaledTime >= nextOrientation) RefreshOrientation();
             if (!testCapture)
             {
 #if UNITY_ANDROID && STARE_MOBILE && !UNITY_EDITOR
@@ -167,8 +185,10 @@ namespace Staredown
         {
             if (sample == null || sample.sequence <= sampleSequence) return;
             sampleSequence = sample.sequence;
-            bool valid = sample.valid && sample.age <= StareMobileBlink.StaleAfter && sample.age >= 0 &&
-                Mathf.Abs(sample.yaw) <= 18 && Mathf.Abs(sample.pitch) <= 25;
+            bool fresh = sample.age <= StareMobileBlink.StaleAfter && sample.age >= 0;
+            bool facing = Mathf.Abs(sample.yaw) <= 18 && Mathf.Abs(sample.pitch) <= 25;
+            bool valid = sample.valid && fresh && facing;
+            trackingReason = !fresh ? 6 : !facing ? 4 : sample.reason;
             blink.Sample(sample.left, sample.right, valid, sample.timestamp, Time.realtimeSinceStartupAsDouble);
             Yaw = valid ? sample.yaw : 0; Pitch = valid ? sample.pitch : 0;
         }
@@ -256,8 +276,9 @@ namespace Staredown
             float side = Mathf.Min(uprightW, uprightH);
             for (int y = 0; y < FrameSize; y++) for (int x = 0; x < FrameSize; x++)
             {
-                // Mirror front preview and head feed once, like a selfie camera.
-                float u = .5f + ((FrameSize - 1 - x + .5f) / FrameSize - .5f) * side / uprightW;
+                // The texture and network frame stay unmirrored. Local selfie
+                // presentation is a HUD UV flip, independent of camera pixels.
+                float u = .5f + ((x + .5f) / FrameSize - .5f) * side / uprightW;
                 float v = .5f + ((y + .5f) / FrameSize - .5f) * side / uprightH;
                 float rawU = u, rawV = v;
                 if (rotation == 90) { rawU = 1 - v; rawV = u; }
@@ -284,11 +305,13 @@ namespace Staredown
         }
 #if UNITY_EDITOR
         public void BeginTestCapture() { StopCamera(); testCapture = Running = true; status = "EDITOR CAMERA FIXTURE"; sampleSequence = 0; }
-        public void SubmitTestSample(float left, float right, bool valid, double timestamp, long sequence, float yaw = 0, float pitch = 0)
+        public void SubmitTestSample(float left, float right, bool valid, double timestamp, long sequence, float yaw = 0, float pitch = 0, int reason = 0, double age = 0)
         {
-            if (testCapture && Running) AcceptSample(new Sample { left = left, right = right, valid = valid, timestamp = timestamp, sequence = sequence, yaw = yaw, pitch = pitch });
+            if (testCapture && Running) AcceptSample(new Sample { left = left, right = right, valid = valid, timestamp = timestamp, sequence = sequence, yaw = yaw, pitch = pitch, reason = reason, age = age });
         }
         public void SubmitTestFrame(byte[] jpeg) { if (testCapture) { EnsurePreview(); if(preview.LoadImage(jpeg,false)) PublishJpeg(jpeg); } }
+        public void SubmitTestPixels(Color32[] source, int width, int height, int rotation, bool flipped)
+        { if (testCapture) NormalizeThumbnail(source,width,height,rotation,flipped); }
 #endif
         void OnDisable() { StopCamera(); }
         void OnDestroy() { StopCamera(); }
