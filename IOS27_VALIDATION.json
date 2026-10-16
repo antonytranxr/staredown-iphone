@@ -1,0 +1,45 @@
+{
+  "incident": {
+    "reported_version": "1.1.1 (4)",
+    "device": "iPhone14,2",
+    "OS": "iOS27.0.1",
+    "exception": "EXC_BREAKPOINT/SIGTRAP",
+    "top_frame": "___UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption_block_invoke",
+    "elapsed_launch_seconds": 0.24
+  },
+  "diagnosis": "UIKit rejected the legacy application lifecycle before gameplay. The source was pinned to Unity6000.2.7f2 without UnityScene native templates.",
+  "remediation": {
+    "phone_editor": "6000.3.26f1 LTS",
+    "phone_version": "1.1.2",
+    "phone_build": 5,
+    "minimum_ios": "15.0",
+    "quest_editor_unchanged": "6000.2.7f2",
+    "export_guards": [
+      "Reject editor iOS modules without native UnityScene templates",
+      "Reject absent/empty application scene configuration",
+      "Require UnityScene delegate and registered native scene source files"
+    ]
+  },
+  "validation": {
+    "legacy_module_and_export_rejected": 2,
+    "modern_module_and_export_accepted": 2,
+    "export": "Succeeded errors=0 warnings=2 duration=00:00:10.6332570",
+    "verified": [
+      "Single application scene with UnityScene delegate",
+      "Native UnityScene callbacks and initUnityWithScene",
+      "UnityScene.mm Xcode Sources registration",
+      "Native camera and speaker bridges match source and use ARC",
+      "Deployment target15.0",
+      "Native iOS support module installed through UnityHub"
+    ]
+  },
+  "remaining": [
+    "No iOS27 device connected; tester must cold-launch replacement and test permission prompts/background-resume/camera/voice",
+    "Local Xcode16.2 SDK18.2; no new native archive or TestFlight upload produced"
+  ],
+  "sources": [
+    "https://developer.apple.com/documentation/uikit/transitioning-to-the-uikit-scene-based-life-cycle",
+    "https://discussions.unity.com/t/info-apple-update-your-editor-to-receive-uiscene-lifecycle-support/1709065",
+    "https://unity.com/releases/editor/whats-new/6000.3.26f1"
+  ]
+}

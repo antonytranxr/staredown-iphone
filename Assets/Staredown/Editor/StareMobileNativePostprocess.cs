@@ -14,6 +14,7 @@ namespace Staredown.Editor
             if (target != BuildTarget.iOS || !StareMobileBuild.BuildingMobile) return;
             string projectPath = PBXProject.GetPBXProjectPath(path);
             var project = new PBXProject(); project.ReadFromFile(projectPath);
+            StareMobileIOSLifecycle.ValidateExport(path, project);
             string framework = project.GetUnityFrameworkTargetGuid();
             foreach (string name in new[] { "ARKit.framework", "CoreImage.framework", "UIKit.framework", "QuartzCore.framework", "AVFoundation.framework" })
                 project.AddFrameworkToProject(framework, name, false);

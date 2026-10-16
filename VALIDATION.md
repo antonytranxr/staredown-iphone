@@ -1,3 +1,11 @@
+# iOS 27 launch compatibility — 2026-10-16
+
+The 1.1.1 (4) tester report traps in UIKit's no-scene-lifecycle check about 0.24 seconds after launch on iOS 27.0.1. The iPhone project now uses Unity 6000.3.26f1 LTS, which includes Unity's native UnityScene lifecycle. The next phone version is **1.1.2 (5)** with a minimum deployment target of **iOS 15**.
+
+A fresh Unity export succeeded with zero errors and two warnings. Both older editor modules and the old Xcode export are rejected by the new guard; the new module and export pass. The generated application scene manifest, native UnityScene callbacks, UnityScene.mm Sources registration, native bridge ARC settings and iOS 15 deployment target were checked. Existing avatar/texture GUIDs are retained; the checked-in metadata and package lock changes are the editor's migration for this separate iPhone checkout. The working Quest checkout remains on its existing editor.
+
+The iPhone was offline and no iOS 27 runtime was available locally. The rebuilt app still needs an iOS 27 cold-launch and background/resume/camera/voice test. No new native archive, IPA or TestFlight upload was produced. See `IOS27_LAUNCH.md` for replacement-build instructions and `IOS27_VALIDATION.json` for evidence.
+
 # iPhone speaker and anti-aliasing update — 2026-10-15
 
 Phone source 1.1.1 build 3 adds a native iOS speaker fallback. If the active PlayAndRecord session routes exclusively to the built-in receiver, with no external microphone, the helper selects the built-in speaker. It monitors audio route changes and recovery without changing Vivox's category, mode or session activation. Headphones, Bluetooth, AirPlay and USB routes remain untouched. Diagnostic logs record port types and category/mode changes without device names or identifiers.
