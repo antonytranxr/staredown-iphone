@@ -7,13 +7,14 @@ namespace Staredown
   public const int CaptureSurfaceLayer=27;
   StareVisuals owner;Material surface;Renderer pane;Camera capture;readonly RenderTexture[] feeds=new RenderTexture[2];float next;bool rendering;
   public int Captures {get;private set;}
+  public float RefreshRate=>owner!=null&&owner.PhoneView?6:8;
   public void Initialize(StareVisuals view,Material material){owner=view;surface=material;pane=GetComponent<Renderer>();}
   void LateUpdate()
   {
    var head=owner!=null?owner.LocalViewer:null;var source=head!=null?head.GetComponent<Camera>():Camera.main;
    bool visible=source!=null&&Vector3.Distance(source.transform.position,transform.position)<8&&Vector3.Dot(transform.forward,source.transform.position-transform.position)>.05f&&GeometryUtility.TestPlanesAABB(GeometryUtility.CalculateFrustumPlanes(source),pane.bounds);
    surface.SetFloat("_MirrorReady",visible&&feeds[0]!=null?1:0);
-   if(!visible||rendering||Time.unscaledTime<next)return;next=Time.unscaledTime+.125f;Capture(source);
+   if(!visible||rendering||Time.unscaledTime<next)return;next=Time.unscaledTime+1/RefreshRate;Capture(source);
   }
   public static Matrix4x4 Reflection(Vector3 normal,Vector3 point)
   {
@@ -33,20 +34,21 @@ namespace Staredown
   public void Capture(Camera source)
   {
    if(rendering||source==null)return;rendering=true;bool invert=GL.invertCulling;
-   if(capture==null){var node=new GameObject("Arena mirror capture");node.transform.SetParent(owner.transform,false);capture=node.AddComponent<Camera>();capture.enabled=false;for(int i=0;i<2;i++){feeds[i]=new RenderTexture(1024,1536,16){name="Arena mirror eye "+i,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=4};feeds[i].Create();}surface.SetTexture("_MirrorLeft",feeds[0]);surface.SetTexture("_MirrorRight",feeds[1]);}
+   if(capture==null){var node=new GameObject("Arena mirror capture");node.transform.SetParent(owner.transform,false);capture=node.AddComponent<Camera>();capture.enabled=false;bool phone=owner.PhoneView;for(int i=0;i<(phone?1:2);i++){feeds[i]=new RenderTexture(phone?512:1024,phone?768:1536,16){name="Arena mirror eye "+i,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=phone?2:4};feeds[i].Create();}surface.SetTexture("_MirrorLeft",feeds[0]);surface.SetTexture("_MirrorRight",phone?feeds[0]:feeds[1]);}
    var local=owner.LocalAvatar;var detail=local!=null?local.preset.GetComponent<LODGroup>():null;if(detail!=null)detail.ForceLOD(0);
    owner.SetLocalMetaCapture(true);
    try
    {
     capture.CopyFrom(source);capture.enabled=false;capture.stereoTargetEye=StereoTargetEyeMask.None;capture.allowHDR=false;capture.allowMSAA=false;capture.cullingMask=source.cullingMask&~((1<<CaptureSurfaceLayer)|(1<<2)|(1<<26));
     var reflection=Reflection(transform.forward,transform.position);
-    int count=source.stereoEnabled?2:1;
+    bool stereo=source.stereoEnabled&&!owner.PhoneView;
+    int count=stereo?2:1;
     for(int i=0;i<count;i++)
     {
      var eye=i==0?Camera.StereoscopicEye.Left:Camera.StereoscopicEye.Right;
-     var view=source.stereoEnabled?source.GetStereoViewMatrix(eye):source.worldToCameraMatrix;
+     var view=stereo?source.GetStereoViewMatrix(eye):source.worldToCameraMatrix;
      capture.transform.position=reflection.MultiplyPoint(view.inverse.MultiplyPoint(Vector3.zero));capture.worldToCameraMatrix=view*reflection;
-     capture.projectionMatrix=source.stereoEnabled?source.GetStereoProjectionMatrix(eye):source.projectionMatrix;
+     capture.projectionMatrix=stereo?source.GetStereoProjectionMatrix(eye):source.projectionMatrix;
      // Fill the render texture with the actual mirror portal, including each
      // eye's viewpoint, rather than spending most pixels outside its frame.
      capture.projectionMatrix=SurfaceProjection(capture.worldToCameraMatrix,transform,capture.nearClipPlane,capture.farClipPlane,capture.projectionMatrix);

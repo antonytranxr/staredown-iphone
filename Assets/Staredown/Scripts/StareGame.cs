@@ -95,6 +95,16 @@ namespace Staredown
   void OnDestroy(){connectionGeneration++;net?.Dispose();}
   public void Act(string action)
   {
+   if(action=="name-panel"){if(InLobby)view.ShowNamePanel(true,StarePlayerName.Saved);return;}
+   if(action=="name-back"){view.ShowNamePanel(false,StarePlayerName.Saved);return;}
+   if(action.StartsWith("name-key:")){if(InLobby)view.EditPlayerName(action.Substring(9));return;}
+   if(action=="name-save")
+   {
+    if(!InLobby)return;
+    string name=StarePlayerName.Save(view.NameDraft);
+    if(model!=null)model.SetName(localId,name);else if(localId>=0)net?.Send(0,new WireMessage{kind="name",name=name});
+    view.SetPlayerNameLabel(name);view.ShowNamePanel(false,name);return;
+   }
    if(action=="intro-done"){view.ShowOpeningInstructions(false);RecallMenu();return;}
    if(action=="how-to-play"){if(InLobby){view.ShowOpeningInstructions(true);RecallMenu();}return;}
    if(action=="skins"){if(InLobby){view.ShowSkins(true,progression);RecallMenu();}return;}
@@ -154,19 +164,29 @@ namespace Staredown
    }
    if(action=="calibrate"){eyes.Calibrate();return;}
    if(action=="start"){if(model!=null)model.Start();return;}
-   if(action=="leave"){view.HideAuxiliaryPanels();cameraStream?.Reset();connectionGeneration++;roomBusy=false;roomCode=null;view.ShowJoinPanel(false);view.ShowSettingsPanel(false);matchMenuOpen=false;lobbyMenuOpen=true;placedPlayerId=-1;lastPhase=0;net?.Dispose();net=null;model=null;localId=-1;autoStart=false;pendingAvatarPoses.Clear();State=new ArenaState();SeatLobby();notice="Choose how to play";return;}
+   if(action=="leave"){LeaveRoom(false);return;}
    if(action=="host"||action=="join"){if(!roomBusy)ConnectRoom(action=="host",address);return;}
    if(action=="demo")
    {
-    Act("leave");choosingAvatar=false;eyes.Calibrate();model=new Tournament();model.SelectArena(preferredArenaTheme);localId=0;model.Add(0,"YOU");SendAvatarSelection();
+    Act("leave");choosingAvatar=false;eyes.Calibrate();model=new Tournament();model.SelectArena(preferredArenaTheme);localId=0;model.Add(0,StarePlayerName.Saved);SendAvatarSelection();
     for(int i=1;i<Tournament.Capacity;i++)model.Add(i,StareAvatarCatalog.Names[StareAvatarCatalog.PresetId(i)]+" "+(i+1),true);
     autoStart=true;notice=eyes.simulated?"PRACTICE / BUTTON DEMO":"PRACTICE / REAL QUEST PRO BLINKS";return;
    }
   }
+  void LeaveRoom(bool preserveLobbyMenu)
+  {
+   bool preserve=preserveLobbyMenu&&InLobby;
+   view.HideAuxiliaryPanels();cameraStream?.Reset();connectionGeneration++;roomBusy=false;roomCode=null;
+   view.ShowJoinPanel(false);view.ShowSettingsPanel(false);matchMenuOpen=false;lobbyMenuOpen=true;
+   placedPlayerId=-1;lastPhase=0;net?.Dispose();net=null;model=null;localId=-1;autoStart=false;
+   pendingAvatarPoses.Clear();State=new ArenaState();
+   if(preserve){lastSeat=new Vector3(999,0,0);menuPlaceAt=0;}else SeatLobby();
+   notice="Choose how to play";
+  }
   async void ConnectRoom(bool host,string code)
   {
    if(!host&&!StareRelayNetwork.ValidCode(code)){notice="ENTER THE 4-DIGIT ROOM CODE";view.SetJoinStatus(notice);return;}
-   Act("leave");choosingAvatar=false;eyes.Calibrate();roomBusy=true;
+   LeaveRoom(true);choosingAvatar=false;eyes.Calibrate();roomBusy=true;
    bool failed=false;int generation=connectionGeneration;var relay=new StareRelayNetwork();net=relay;
    notice=host?"CREATING ONLINE ROOM...":"JOINING ROOM "+StareRelayNetwork.NormalizeCode(code)+"...";
    try
@@ -176,7 +196,7 @@ namespace Staredown
      string created=await relay.HostAsync();if(generation!=connectionGeneration||this==null)return;
      while(!relay.Bound&&string.IsNullOrEmpty(relay.Error)){relay.Tick();await System.Threading.Tasks.Task.Delay(20);if(generation!=connectionGeneration||this==null)return;}
      if(!string.IsNullOrEmpty(relay.Error))throw new Exception(relay.Error);
-     model=new Tournament();model.SelectArena(preferredArenaTheme);localId=0;model.Add(0,"YOU");model.SetBotFill(PlayerPrefs.GetInt("Staredown.BotFill",1)!=0);SendAvatarSelection();roomCode=created;
+     model=new Tournament();model.SelectArena(preferredArenaTheme);localId=0;model.Add(0,StarePlayerName.Saved);model.SetBotFill(PlayerPrefs.GetInt("Staredown.BotFill",1)!=0);SendAvatarSelection();roomCode=created;
      notice="Share the code. Explore while friends join.";if(Debug.isDebugBuild)Debug.Log("[STARE ROOM] created code="+roomCode);
     }
     else {await relay.JoinAsync(code);if(generation!=connectionGeneration||this==null)return;roomCode=relay.RoomCode;}
@@ -225,6 +245,7 @@ namespace Staredown
      else if(m.kind=="disconnected")model.Remove(packet.sender);
      else if(m.kind=="dance")model.Dance(packet.sender,m.dancing,m.dance);
      else if(m.kind=="skin")model.SelectSkin(packet.sender,m.skin);
+     else if(m.kind=="name")model.SetName(packet.sender,m.name);
      else if(m.kind=="avatar")model.SelectAvatar(packet.sender,m.avatar,m.avatarUserId);
      else if(m.kind=="avatarPose")
      {
@@ -238,7 +259,7 @@ namespace Staredown
     }
     else
     {
-     if(m.kind=="welcome"){roomBusy=false;localId=m.id;if(Debug.isDebugBuild)Debug.Log("[STARE ROOM] joined code="+roomCode+" player="+localId);SendAvatarSelection();notice="ROOM "+roomCode+" / CONNECTED / WAIT FOR HOST";}
+     if(m.kind=="welcome"){roomBusy=false;localId=m.id;net?.Send(0,new WireMessage{kind="name",name=StarePlayerName.Saved});if(Debug.isDebugBuild)Debug.Log("[STARE ROOM] joined code="+roomCode+" player="+localId);SendAvatarSelection();notice="ROOM "+roomCode+" / CONNECTED / WAIT FOR HOST";}
      if(m.kind=="state"&&m.state!=null)State=m.state;
      if(m.kind=="avatarPose"&&m.id!=localId&&State.fighters.Any(f=>f.id==m.id&&f.avatar==StareAvatarCatalog.Meta))
      {byte[] pose;if(TryPose(m.pose,out pose))pendingAvatarPoses[m.id]=pose;}
@@ -285,6 +306,7 @@ namespace Staredown
    bool lobby=State.phase==(int)MatchPhase.Lobby;
    if(waitingForMeta){avatarNotice=StareMetaAvatars.Instance.Status;if(StareMetaAvatars.Instance.Ready&&lobby)SelectAvatar(StareAvatarCatalog.Meta);}
    view.SetMusicLabel(music!=null&&music.Muted,music!=null?music.Volume:1);view.SetFpsLabel(GetComponent<StareHeadsetDiagnostics>()?.Visible??false);
+   view.SetPlayerNameLabel(StarePlayerName.Saved);
    view.SetArenaTheme(ArenaTheme);
    progression.Observe(State,localId,VoiceRoomId);view.UpdateSkinChoices(progression);
    view.UpdateArenaSelection(ArenaTheme,CanChooseArena,localId>=0&&model==null);view.UpdateDanceControls(CanDance,Dancing);
@@ -328,9 +350,10 @@ namespace Staredown
     bool entered=placedPlayerId!=localId||lastPhase!=State.phase;
     if(InLobby&&entered)
     {
-     Place(ArenaLayout.Seat(State,localId),ArenaLayout.Facing(State,localId));lastSeat=new Vector3(999,0,0);
+     bool preserveMenu=placedPlayerId!=localId&&lobbyMenuOpen;
+     PlaceLobbyEntry(ArenaLayout.Seat(State,localId),ArenaLayout.Facing(State,localId),preserveMenu);lastSeat=new Vector3(999,0,0);
      choosingAvatar=false;lobbyMenuOpen=placedPlayerId!=localId;matchMenuOpen=false;view.ShowJoinPanel(false);view.ShowSettingsPanel(false);menuPlaceAt=0;
-     if(lobbyMenuOpen)view.PlaceLobbyMenus(rig.centerEyeAnchor);
+     if(lobbyMenuOpen&&!preserveMenu)view.PlaceLobbyMenus(rig.centerEyeAnchor);
      if(lastPhase==(int)MatchPhase.Champion)notice="Match complete. You're back in the arena.";
     }
     else if(!InLobby)
@@ -341,6 +364,18 @@ namespace Staredown
     lastLocalAlive=State.fighters.First(x=>x.id==localId).alive;
     placedPlayerId=localId;lastPhase=State.phase;
    }
+  }
+  void PlaceLobbyEntry(Vector3 pos,Vector3 facing,bool preserveMenu)
+  {
+   if(!preserveMenu){Place(pos,facing);return;}
+   // Move the already-open menu by the same rigid transform as the player.
+   // Re-anchoring to the latest head pose here shifts the user's click target.
+   var panels=new[]{view.menu,view.characterMenu};
+   var positions=new Vector3[panels.Length];var rotations=new Quaternion[panels.Length];
+   for(int i=0;i<panels.Length;i++)if(panels[i]!=null){positions[i]=rig.transform.InverseTransformPoint(panels[i].position);rotations[i]=Quaternion.Inverse(rig.transform.rotation)*panels[i].rotation;}
+   Place(pos,facing);
+   for(int i=0;i<panels.Length;i++)if(panels[i]!=null)panels[i].SetPositionAndRotation(rig.transform.TransformPoint(positions[i]),rig.transform.rotation*rotations[i]);
+   Physics.SyncTransforms();
   }
   void Place(Vector3 pos,Vector3 facing)
   {

@@ -8,8 +8,12 @@ namespace Staredown
  // This scene has an ordinary camera; no OVRCameraRig or XR runtime is started.
  public sealed class StareMobileSession : MonoBehaviour
  {
+  public const int RenderFrameRate=30,MaxRenderLongEdge=1280;
   public Camera ViewCamera;
   public StareMobileCamera MobileCamera {get;private set;}
+  public StareVoice Voice {get;private set;}
+  public string VoiceRoomId=>(transport as StareRelayNetwork)?.VoiceKey;
+  public string PlayerName=>StarePlayerName.Saved;
   public ArenaState State {get;private set;}=new ArenaState();
   public int LocalId {get;private set;}=-1;
   public string RoomCode {get;private set;}="";
@@ -24,10 +28,11 @@ namespace Staredown
   public StareCameraStream CameraHeads {get;private set;}
   Tournament model;IStareTransport transport;int generation,placed=-1,lastPhase=-1;
   bool lastAlive=true,practice,practiceStarted,profileSent;float sendAt,yaw,pitch;Vector3 floor=new Vector3(0,0,-10);
-  AudioSource music,effects;int effectPhase=-1,aliveCount=-1;
+  AudioSource music,effects;AudioClip eliminationSound,victorySound;int effectPhase=-1,aliveCount=-1;
+  float nextPerformanceCheck;int appliedThermal=-1;
   void Awake()
   {
-   Application.targetFrameRate=60;Application.runInBackground=true;Screen.sleepTimeout=SleepTimeout.NeverSleep;
+   Application.targetFrameRate=RenderFrameRate;Application.runInBackground=true;Screen.sleepTimeout=SleepTimeout.NeverSleep;
 #if STARE_MOBILE
    Screen.orientation=ScreenOrientation.LandscapeLeft;
 #endif
@@ -37,13 +42,17 @@ namespace Staredown
    if(ViewCamera==null){var go=new GameObject("Mobile arena camera");ViewCamera=go.AddComponent<Camera>();}
    if(ViewCamera.GetComponent<AudioListener>()==null)ViewCamera.gameObject.AddComponent<AudioListener>();
    ViewCamera.tag="MainCamera";ViewCamera.stereoTargetEye=StereoTargetEyeMask.None;ViewCamera.fieldOfView=65;ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=160;
+   ViewCamera.allowHDR=false;ViewCamera.allowMSAA=false;
    ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.identity);
    MobileCamera=gameObject.AddComponent<StareMobileCamera>();MobileCamera.FrameReady+=ForwardCamera;
    CameraHeads=gameObject.AddComponent<StareCameraStream>();
    Visuals=gameObject.AddComponent<StareVisuals>();Visuals.Build();Visuals.SetArenaTheme(0);HideVrMenus();
+   Voice=gameObject.AddComponent<StareVoice>();Voice.Initialize(this);
    var hud=gameObject.AddComponent<StareMobileHud>();hud.Initialize(this);
    music=gameObject.AddComponent<AudioSource>();music.clip=Resources.Load<AudioClip>("Audio/ArenaPulse");music.loop=true;music.volume=.2f;music.spatialBlend=0;music.Play();
    effects=gameObject.AddComponent<AudioSource>();effects.playOnAwake=false;effects.volume=.5f;
+   eliminationSound=Resources.Load<AudioClip>("Audio/Effects/Eliminate");victorySound=Resources.Load<AudioClip>("Audio/Effects/Victory");
+   ApplyPhonePerformance();
    Debug.Log("[STARE MOBILE] ready / ordinary camera / shared numeric Relay rooms / camera requires explicit consent");
   }
   void HideVrMenus()
@@ -56,7 +65,12 @@ namespace Staredown
   public void Join(string code)=>Connect(false,code);
   public void Practice()
   {
-   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,"PHONE PLAYER");model.EnableBotFill();model.SelectAvatar(0,2);Status="Practice: look at the camera and keep both eyes open to calibrate.";
+   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);Status="Practice: look at the camera and keep both eyes open to calibrate.";
+  }
+  public void SetPlayerName(string value)
+  {
+   string saved=StarePlayerName.Save(value);if(!Connected)return;
+   if(model!=null)model.SetName(LocalId,saved);else transport?.Send(0,new WireMessage{kind="name",name=saved});
   }
   public void StartMatch(){if(model!=null&&!model.Start())Status="Every human needs a visible face and open-eye calibration before starting.";}
   async void Connect(bool host,string code)
@@ -72,7 +86,7 @@ namespace Staredown
      string room=await relay.HostAsync();if(request!=generation||this==null)return;
      while(!relay.Bound&&string.IsNullOrEmpty(relay.Error)){relay.Tick();await System.Threading.Tasks.Task.Delay(20);if(request!=generation||this==null)return;}
      if(!string.IsNullOrEmpty(relay.Error))throw new InvalidOperationException(relay.Error);
-     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,"PHONE HOST");model.EnableBotFill();model.SelectAvatar(0,2);Busy=false;Status="Share the room code. Explore while friends join.";
+     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);Busy=false;Status="Share the room code. Explore while friends join.";
     }
     else {await relay.JoinAsync(code);if(request!=generation||this==null)return;RoomCode=StareRelayNetwork.NormalizeCode(code);Status="Connected to Relay. Waiting for the host…";}
    }
@@ -93,6 +107,8 @@ namespace Staredown
    if(action=="calibrate"){MobileCamera.Calibrate();return;}
    if(action=="bot-fill"){if(model!=null&&State.phase==(int)MatchPhase.Lobby)model.SetBotFill(!model.BotFillEnabled);return;}
    if(action=="music"){music.mute=!music.mute;return;}
+   if(action=="mic"){Voice?.ToggleMic();return;}
+   if(action=="voice"){Voice?.ToggleVoice();return;}
    if(action=="leave"){Leave();return;}
    if(action.StartsWith("dance:")){int dance;if(CanDance&&int.TryParse(action.Substring(6),out dance)&&dance>=-1&&dance<=3){if(model!=null)model.Dance(LocalId,dance>=0,Mathf.Max(0,dance));else transport?.Send(0,new WireMessage{kind="dance",dancing=dance>=0,dance=Mathf.Max(0,dance)});}return;}
   }
@@ -104,7 +120,7 @@ namespace Staredown
    profileSent=enabled;
   }
   void ForwardCamera(byte[] jpeg)
-  {if(Connected&&MobileCamera.Running&&MobileCamera.Valid)CameraHeads.Publish(jpeg,LocalId,model,transport);}
+  {if(Connected&&MobileCamera.Running)CameraHeads.Publish(jpeg,LocalId,model,transport);}
   void Pump()
   {
    if(transport==null)return;transport.Tick();StareNetwork.Incoming packet;
@@ -117,6 +133,7 @@ namespace Staredown
     {
      if(message.kind=="connected"){if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){transport.ClosePeer(packet.sender);continue;}transport.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender});}
      else if(message.kind=="disconnected")model.Remove(packet.sender);
+     else if(message.kind=="name")model.SetName(packet.sender,message.name);
      else if(message.kind=="input"&&Finite(message.left)&&Finite(message.right)&&Finite(message.yaw)&&Finite(message.pitch)){model.Input(packet.sender,message.left,message.right,message.valid,message.ready,message.blink,message.yaw,message.pitch,message.demo);model.Presence(packet.sender,message.presence);if(message.hasRoomPose)model.RoomPose(packet.sender,message.roomPosition,message.roomYaw);}
      else if(message.kind=="avatar")model.SelectAvatar(packet.sender,message.avatar,message.avatarUserId);
      else if(message.kind=="skin")model.SelectSkin(packet.sender,message.skin);
@@ -126,7 +143,7 @@ namespace Staredown
     }
     else
     {
-     if(message.kind=="welcome"){LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});SendProfile(MobileCamera.Running);Status="Room "+RoomCode+". Explore and wait for the host.";}
+     if(message.kind=="welcome"){LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(MobileCamera.Running);Status="Room "+RoomCode+". Explore and wait for the host.";}
      if(message.kind=="state"&&message.state!=null)State=message.state;
      if(message.kind=="disconnected"){string error=transport.Error;Leave();Status="Connection ended: "+error;break;}
     }
@@ -137,6 +154,7 @@ namespace Staredown
   void Update()
   {
    if(MobileCamera==null||Visuals==null)return;
+   if(Time.unscaledTime>=nextPerformanceCheck){nextPerformanceCheck=Time.unscaledTime+3;ApplyPhonePerformance();}
    Pump();PlaceForPhase();float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
    yaw+=LookInput.x;pitch=Mathf.Clamp(pitch-LookInput.y,-65,65);LookInput=Vector2.zero;
    if(CanMove){var movement=Quaternion.Euler(0,yaw,0)*new Vector3(MoveInput.x,0,MoveInput.y)*3*dt;floor=StareArenaFields.Clamp(State,floor+movement);}
@@ -163,14 +181,34 @@ namespace Staredown
   void Feedback()
   {
    int alive=State.fighters.Count(f=>f.alive);
-   if(aliveCount>=0&&alive<aliveCount&&State.phase!=0){var sound=Resources.Load<AudioClip>("Audio/Effects/Eliminate");if(sound!=null)effects.PlayOneShot(sound,.56f);}
-   if(effectPhase!=State.phase&&State.phase==(int)MatchPhase.Champion){var sound=Resources.Load<AudioClip>("Audio/Effects/Victory");if(sound!=null)effects.PlayOneShot(sound,.3f);}
+   if(aliveCount>=0&&alive<aliveCount&&State.phase!=0&&eliminationSound!=null)effects.PlayOneShot(eliminationSound,.56f);
+   if(effectPhase!=State.phase&&State.phase==(int)MatchPhase.Champion&&victorySound!=null)effects.PlayOneShot(victorySound,.3f);
    effectPhase=State.phase;aliveCount=alive;
+  }
+  public static Vector2Int RenderResolution(int width,int height)
+  {
+   float scale=Mathf.Min(1,MaxRenderLongEdge/(float)Mathf.Max(1,Mathf.Max(width,height)));
+   return new Vector2Int(Mathf.Max(1,Mathf.RoundToInt(width*scale)),Mathf.Max(1,Mathf.RoundToInt(height*scale)));
+  }
+  void ApplyPhonePerformance()
+  {
+#if STARE_MOBILE && !UNITY_EDITOR
+   int thermal=MobileCamera!=null?MobileCamera.ThermalLevel:0;if(appliedThermal==thermal)return;appliedThermal=thermal;
+   Application.targetFrameRate=thermal>=2?24:RenderFrameRate;
+   QualitySettings.vSyncCount=0;QualitySettings.antiAliasing=0;QualitySettings.softParticles=false;
+   QualitySettings.pixelLightCount=1;QualitySettings.shadowDistance=20;QualitySettings.shadowCascades=1;
+   QualitySettings.shadows=ShadowQuality.HardOnly;QualitySettings.shadowResolution=ShadowResolution.Low;
+   QualitySettings.lodBias=Mathf.Min(QualitySettings.lodBias,.85f);
+   // Keep four skin weights: lowering them changes the repaired facial rigs.
+   QualitySettings.skinWeights=SkinWeights.FourBones;
+   var size=RenderResolution(Screen.width,Screen.height);if(size.x!=Screen.width||size.y!=Screen.height)Screen.SetResolution(size.x,size.y,FullScreenMode.FullScreenWindow);
+   Debug.Log("[STARE MOBILE PERFORMANCE] render="+size.x+"x"+size.y+" fps="+Application.targetFrameRate+" thermal="+thermal+" / eye capture remains independent");
+#endif
   }
   void OnApplicationPause(bool paused){if(paused){SendProfile(false);MobileCamera?.StopCamera();MoveInput=LookInput=Vector2.zero;}}
   void OnDestroy(){generation++;transport?.Dispose();if(MobileCamera!=null)MobileCamera.FrameReady-=ForwardCamera;CameraHeads?.Reset();Screen.sleepTimeout=SleepTimeout.SystemSetting;}
 #if UNITY_EDITOR
-  public void TestConnect(IStareTransport testTransport,bool host){Leave();transport=testTransport;if(host){model=new Tournament();model.Add(0,"PHONE HOST");model.EnableBotFill();LocalId=0;}else Busy=true;}
+  public void TestConnect(IStareTransport testTransport,bool host){Leave();transport=testTransport;if(host){model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();LocalId=0;}else Busy=true;}
 #endif
  }
 }

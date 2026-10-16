@@ -59,7 +59,11 @@ namespace Staredown
         }
         void LoseTracking()
         {
-            Valid = calibrated = armed = false;
+            // Calibration belongs to this explicit camera session. A brief
+            // missing face must not restart the round or grant a fresh 1.5 s
+            // calibration window on return. Only fresh captures can complete
+            // a blink; the host separately forfeits a sustained missing face.
+            Valid = false;
             Left = Right = 0; openStart = closedStart = double.NaN;
         }
     }

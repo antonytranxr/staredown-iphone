@@ -21,6 +21,9 @@ namespace Staredown
         [NonSerialized] public int blinkSequence;
         [NonSerialized] public bool openingEyesPending;
         [NonSerialized] public float openingClosedFor;
+        [NonSerialized] public bool phoneTrackingRequired;
+        [NonSerialized] public float faceMissingFor, phoneClosedFor;
+        [NonSerialized] public bool phoneClosureArmed;
         [NonSerialized] public bool disconnected;
     }
     [Serializable] public class Pairing
@@ -109,6 +112,7 @@ namespace Staredown
     public sealed class Tournament
     {
         public const int Capacity = 16;
+        public const float PhoneFaceLossGrace = 1f;
         public readonly List<Fighter> Fighters = new List<Fighter>();
         public readonly List<Pairing> Pairs = new List<Pairing>();
         public readonly List<Toss> Tosses = new List<Toss>();
@@ -158,6 +162,12 @@ namespace Staredown
             Fighters.Add(f); if (!bot) FillVacantSeats(); return f;
         }
         public Fighter Find(int id) => Fighters.Find(f => f.id == id);
+        public bool SetName(int id,string name)
+        {
+            var f=Find(id);var clean=StarePlayerName.Clean(name);
+            if(f==null||f.bot||f.disconnected||Phase!=MatchPhase.Lobby||string.IsNullOrEmpty(clean))return false;
+            f.name=clean;return true;
+        }
         public bool Presence(int id,StarePresenceFrame frame)
         {var f=Find(id);if(f==null||f.bot||f.disconnected)return false;f.presence=StarePresenceValidation.Sanitize(frame);f.presenceAt=Clock;return true;}
         public bool SelectAvatar(int id, int avatar, string userId = null)
@@ -214,6 +224,7 @@ namespace Staredown
             if (survivors.Count <= 1) { Phase = MatchPhase.Champion; Winner = survivors.Count == 1 ? survivors[0].id : -1; Announcement = Winner < 0 ? "MATCH ENDED" : survivors[0].DisplayName + " / UNBLINKING CHAMPION"; if(survivors.Count==1&&survivors[0].bot)survivors[0].dancing=true; Remaining = 8; return; }
             Round++; FinalRound = survivors.Count == 2; Pairs.Clear();
             foreach (var f in Fighters) f.pair = -1;
+            foreach (var f in survivors){f.phoneTrackingRequired=f.phoneCamera;f.faceMissingFor=f.phoneClosedFor=0;f.phoneClosureArmed=true;}
             // Rotate seeding each round so a potential bye does not always favor the same seat.
             if (survivors.Count > 2) { int n = Round % survivors.Count; survivors = survivors.Skip(n).Concat(survivors.Take(n)).ToList(); }
             if (Round == 1 && BotFillEnabled)
@@ -246,17 +257,43 @@ namespace Staredown
         {
             if (Phase != MatchPhase.Duel || TrackingPaused) return;
             var f = Find(id); if (f == null || !f.alive || f.pair < 0 || !f.ready || !f.valid) return;
+            QueueBlink(f);
+        }
+        void QueueBlink(Fighter f)
+        {
             var p = Pairs[f.pair]; if (p.winner >= 0 || p.cooldown > 0) return;
-            if (p.pending < 0) { p.pending = id; p.pendingAt = Clock; }
-            else if (p.pending != id && Clock - p.pendingAt <= .08f)
+            if (p.pending < 0) { p.pending = f.id; p.pendingAt = Clock; }
+            else if (p.pending != f.id && Clock - p.pendingAt <= .08f)
             { p.pending = -1; p.cooldown = 2; Announcement = "DOUBLE BLINK / REMATCH"; }
         }
         public void Tick(float dt)
         {
             float previousClock=Clock;Clock += dt; Tosses.RemoveAll(t => Clock - t.born > 4);
             foreach (var f in Fighters.Where(f => !f.bot && Clock - f.lastInput > 1)) f.valid = false;
-            TrackingPaused = (Phase == MatchPhase.Countdown || Phase == MatchPhase.Duel) &&
-                Pairs.Any(p => p.winner < 0 && (!Find(p.a).valid || !Find(p.b).valid));
+            TrackingPaused=ShouldPauseForTracking();
+            // Phone camera rules are independent of the live video surface. A
+            // missing face forfeits this pair; it cannot freeze every duel.
+            if(Phase==MatchPhase.Duel)
+            {
+                foreach(var p in Pairs.Where(p=>p.winner<0))
+                {
+                    var a=Find(p.a);var b=Find(p.b);
+                    UpdatePhoneFace(a,dt);UpdatePhoneFace(b,dt);
+                    bool lostA=a.phoneTrackingRequired&&a.faceMissingFor>=PhoneFaceLossGrace;
+                    bool lostB=b.phoneTrackingRequired&&b.faceMissingFor>=PhoneFaceLossGrace;
+                    if((lostA||lostB)&&p.pending<0)
+                    {
+                        // Even when both cameras disappear, resolve the pair
+                        // deterministically instead of restarting the round.
+                        var loser=lostA&&(!lostB||a.faceMissingFor>=b.faceMissingFor)?a:b;
+                        var winner=loser==a?b:a;
+                        loser.alive=false;loser.hasRoomPose=false;loser.status="FACE LOST / SPECTATOR";
+                        p.winner=winner.id;p.pending=-1;winner.roundWins++;winner.status="ADVANCED";
+                        Announcement=loser.DisplayName+" / FACE LEFT CAMERA";
+                    }
+                }
+            }
+            TrackingPaused=ShouldPauseForTracking();
             if (TrackingPaused) return;
             if(Phase==MatchPhase.Duel&&Tosses.Count>0)
             {
@@ -310,6 +347,30 @@ namespace Staredown
             }
             else if (Phase == MatchPhase.Intermission) { Remaining -= dt; if (Remaining <= 0) NextRound(); }
             else if (Phase == MatchPhase.Champion) { Remaining-=dt; if(Remaining<=0)ReturnToLobby(); }
+        }
+        bool PausesForTracking(Fighter fighter)
+        {return !fighter.valid&&!(Phase==MatchPhase.Duel&&fighter.phoneTrackingRequired);}
+        bool ShouldPauseForTracking()
+        {return (Phase==MatchPhase.Countdown||Phase==MatchPhase.Duel)&&Pairs.Any(p=>p.winner<0&&(PausesForTracking(Find(p.a))||PausesForTracking(Find(p.b))));}
+        void UpdatePhoneFace(Fighter fighter,float dt)
+        {
+            if(!fighter.phoneTrackingRequired)return;
+            bool visible=fighter.phoneCamera&&fighter.valid;
+            fighter.faceMissingFor=visible?0:fighter.faceMissingFor+dt;
+            if(!visible||TrackingPaused){fighter.phoneClosedFor=0;return;}
+            // The server still judges closure while a phone reacquires its
+            // local calibration after a brief tracking interruption.
+            if(fighter.left<.3f&&fighter.right<.3f){fighter.phoneClosureArmed=true;fighter.phoneClosedFor=0;}
+            else if(fighter.phoneClosureArmed&&Mathf.Max(fighter.left,fighter.right)>=BlinkGate.ClosureThreshold)
+            {
+                fighter.phoneClosedFor+=dt;
+                if(fighter.phoneClosedFor>=.045f)
+                {
+                    QueueBlink(fighter);
+                    fighter.phoneClosureArmed=false;
+                }
+            }
+            else fighter.phoneClosedFor=0;
         }
         // Partial squints remain below the same blink threshold used for humans.
         // The final closure is tied to the server timer, so every client sees the tell.

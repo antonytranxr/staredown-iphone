@@ -7,17 +7,18 @@ namespace Staredown
   public bool ArenaFeedReady=>arenaFeed!=null&&eyeMural!=null&&eyeMural.GetFloat("_ArenaReady")>.5f;
   public bool ArenaFeedMode=>eyeMural!=null&&eyeMural.GetFloat("_ArenaMode")>.5f;
   public RenderTexture ArenaFeed=>arenaFeed;
+  public bool PhoneView=>GetComponent<StareMobileSession>()!=null;
   void UpdateArenaFeed()
   {
    if(eyeMural==null||Time.unscaledTime<nextArenaFeed)return;
-   nextArenaFeed=Time.unscaledTime+.125f;
+   nextArenaFeed=Time.unscaledTime+(PhoneView?.2f:.125f);
    MarkMenusForCapture();
    if(arenaCapture==null)
    {
     var node=new GameObject("Jumbotron arena camera");node.transform.SetParent(transform,false);arenaCapture=node.AddComponent<Camera>();arenaCapture.enabled=false;arenaCapture.stereoTargetEye=StereoTargetEyeMask.None;
     arenaCapture.transform.position=new Vector3(0,7.8f,10);arenaCapture.transform.LookAt(new Vector3(0,.8f,-3));arenaCapture.fieldOfView=57;arenaCapture.aspect=20/5.6f;arenaCapture.nearClipPlane=.15f;arenaCapture.farClipPlane=150;
     arenaCapture.clearFlags=CameraClearFlags.Skybox;arenaCapture.allowHDR=false;arenaCapture.allowMSAA=false;arenaCapture.cullingMask=~((1<<StareArenaMirror.CaptureSurfaceLayer)|(1<<2)|(1<<26));
-    arenaFeed=new RenderTexture(2048,576,16){name="Live arena jumbotron",filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=4};arenaFeed.Create();arenaCapture.targetTexture=arenaFeed;eyeMural.SetTexture("_ArenaTex",arenaFeed);
+    arenaFeed=new RenderTexture(PhoneView?1024:2048,PhoneView?288:576,16){name="Live arena jumbotron",filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=2};arenaFeed.Create();arenaCapture.targetTexture=arenaFeed;eyeMural.SetTexture("_ArenaTex",arenaFeed);
    }
    SetLocalMetaCapture(true);
    try{arenaCapture.Render();eyeMural.SetFloat("_ArenaReady",1);}

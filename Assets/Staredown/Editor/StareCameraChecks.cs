@@ -52,7 +52,7 @@ public static class StareCameraChecks
    stream.Handle(Frame(1,1,jpeg),1,t,net,0);Check(stream.AcceptedFrames==1&&stream.HasLiveFeed(1)&&net.sent.Last().id==1,"validated frame decoded and relayed under real connection id");
    stream.Handle(Frame(1,1,jpeg),1,t,net,0);Check(stream.AcceptedFrames==1,"duplicate frame sequence is ignored");
    stream.Handle(Frame(1,2,jpeg),1,t,net,0);stream.Handle(Frame(1,3,jpeg),1,t,net,0);Check(stream.AcceptedFrames==2,"burst-limited camera traffic cannot grow unbounded");
-   t.Input(1,0,0,false,false,0,0,0);stream.Handle(Frame(1,4,jpeg),1,t,net,0);Check(stream.AcceptedFrames==2,"tracking-loss camera frame rejected");
+   t.Input(1,0,0,false,false,0,0,0);stream.Handle(Frame(1,4,jpeg),1,t,net,0);Check(stream.AcceptedFrames==2,"camera traffic remains burst-limited even when the face is absent");
    t.Input(1,0,0,true,true,0,0,0);t.Phase=MatchPhase.Duel;stream.Handle(new WireMessage{kind="cameraProfile",id=0,camera=true},0,t,net,0);Check(!t.Find(0).phoneCamera,"new stream profile cannot be introduced during tournament");
    stream.Handle(new WireMessage{kind="cameraProfile",id=1,camera=false},1,t,net,0);Check(!t.Find(1).phoneCamera&&stream.FeedCount==0,"turning camera off removes texture and profile immediately");
    stream.Handle(new WireMessage{kind="cameraProfile",id=0,camera=true},1,t,net,0);Check(!t.Find(0).phoneCamera&&!t.Find(1).phoneCamera,"camera resume cannot override another player's identity");

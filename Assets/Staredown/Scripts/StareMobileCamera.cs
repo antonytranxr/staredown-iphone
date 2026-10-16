@@ -20,7 +20,7 @@ namespace Staredown
         public bool Ready => Running && blink.Ready;
         public bool Running { get; private set; }
         public int BlinkSequence => blink.BlinkSequence;
-        public string Status => !Running ? status : !Valid ? "FACE CAMERA / LOOK FORWARD IN GOOD LIGHT" :
+        public string Status => !Running ? status : !Valid ? "CAMERA LIVE / KEEP YOUR FACE IN VIEW" :
             !Ready ? "EYES OPEN / CALIBRATING" : "LIVE / EYES TRACKED";
         public event Action<byte[]> FrameReady;
 
@@ -38,7 +38,8 @@ namespace Staredown
         Color32[] pixels, thumb;
         int[] argb;
         long sampleSequence, nativeFrameSequence;
-        float nextAnalysis, nextFrame;
+        float nextAnalysis, nextFrame, nextThermal;
+        int thermalLevel;
         Coroutine permission;
         bool testCapture;
         int generation;
@@ -49,11 +50,15 @@ namespace Staredown
         [DllImport("__Internal")][return: MarshalAs(UnmanagedType.I1)] static extern bool StareMobileIOSSupported();
         [DllImport("__Internal")][return: MarshalAs(UnmanagedType.I1)] static extern bool StareMobileIOSStart();
         [DllImport("__Internal")] static extern void StareMobileIOSStop();
-        [DllImport("__Internal")] static extern IntPtr StareMobileIOSPoll();
-        [DllImport("__Internal")] static extern long StareMobileIOSFrameSequence();
-        [DllImport("__Internal")] static extern IntPtr StareMobileIOSCopyFrame(out int length);
+        [DllImport("__Internal")] static extern IntPtr StareMobileIOSPollAfter(long sequence);
+        [DllImport("__Internal")] static extern int StareMobileIOSThermalLevel();
+        [DllImport("__Internal")] static extern IntPtr StareMobileIOSCopyFrameAfter(long previousSequence, out long sequence, out int length);
         [DllImport("__Internal")] static extern void StareMobileIOSFree(IntPtr pointer);
 #endif
+        public int ThermalLevel => thermalLevel;
+        // Keep detection at camera cadence; only the decorative video thumbnail
+        // slows down under thermal pressure. Real blink timing is unchanged.
+        float CurrentStreamInterval => thermalLevel >= 2 ? .25f : StreamInterval;
         public void StartCamera()
         {
             if (Running || permission != null) return;
@@ -140,6 +145,13 @@ namespace Staredown
         }
         void Update()
         {
+            if (Time.unscaledTime >= nextThermal)
+            {
+                nextThermal = Time.unscaledTime + 3;
+#if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
+                thermalLevel = StareMobileIOSThermalLevel();
+#endif
+            }
             if (!Running) return;
             if (!testCapture)
             {
@@ -164,7 +176,7 @@ namespace Staredown
         void UpdateAndroid()
         {
             if (detector == null || webcam == null) return;
-            string json = detector.CallStatic<string>("poll");
+            string json = detector.CallStatic<string>("pollAfter", sampleSequence);
             if (!string.IsNullOrEmpty(json))
             {
                 var sample = JsonUtility.FromJson<Sample>(json);
@@ -200,33 +212,32 @@ namespace Staredown
             }
             if (frame)
             {
-                nextFrame = Time.unscaledTime + StreamInterval;
+                nextFrame = Time.unscaledTime + CurrentStreamInterval;
                 NormalizeThumbnail(pixels, webcam.width, webcam.height, webcam.videoRotationAngle, webcam.videoVerticallyMirrored);
-                if (Valid) PublishJpeg(EncodeBounded(preview));
+                PublishJpeg(EncodeBounded(preview));
             }
         }
 #endif
 #if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
         void UpdateIOS()
         {
-            IntPtr pointer = StareMobileIOSPoll();
+            IntPtr pointer = StareMobileIOSPollAfter(sampleSequence);
             if (pointer != IntPtr.Zero)
             {
                 try { AcceptSample(JsonUtility.FromJson<Sample>(Marshal.PtrToStringAnsi(pointer))); }
                 finally { StareMobileIOSFree(pointer); }
             }
             if (Time.unscaledTime < nextFrame) return;
-            nextFrame = Time.unscaledTime + StreamInterval;
-            long serial = StareMobileIOSFrameSequence();
-            if (serial <= nativeFrameSequence) return;
-            nativeFrameSequence = serial;
-            int length; pointer = StareMobileIOSCopyFrame(out length);
+            nextFrame = Time.unscaledTime + CurrentStreamInterval;
+            long serial; int length;
+            pointer = StareMobileIOSCopyFrameAfter(nativeFrameSequence, out serial, out length);
             if (pointer == IntPtr.Zero) return;
+            nativeFrameSequence = serial;
             try
             {
                 if (length <= 0 || length > MaxFrameBytes) return;
                 var bytes = new byte[length]; Marshal.Copy(pointer, bytes, 0, length);
-                EnsurePreview(); if (preview.LoadImage(bytes, false) && Valid) PublishJpeg(bytes);
+                EnsurePreview(); if (preview.LoadImage(bytes, false)) PublishJpeg(bytes);
             }
             finally { StareMobileIOSFree(pointer); }
         }
@@ -266,7 +277,9 @@ namespace Staredown
         }
         void PublishJpeg(byte[] bytes)
         {
-            if (!Running || !Valid || bytes == null || bytes.Length < 4 || bytes.Length > MaxFrameBytes || bytes[0] != 255 || bytes[1] != 216) return;
+            // A camera frame and a usable eye sample are independent. Turning
+            // away must keep the live head visible, including the empty view.
+            if (!Running || bytes == null || bytes.Length < 4 || bytes.Length > MaxFrameBytes || bytes[0] != 255 || bytes[1] != 216) return;
             FrameReady?.Invoke(bytes);
         }
 #if UNITY_EDITOR

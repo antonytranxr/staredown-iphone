@@ -13,7 +13,7 @@ This is the editable Unity project, including the shared arena and VR code requi
 5. Open the exported `Unity-iPhone.xcodeproj` in Xcode. Select your Apple developer team and configure signing for the app target. The app bundle identifier is `com.antony.staredown.mobile`; change it in `StareMobileBuild.cs` if your team needs a different identifier.
 6. Select a connected iPhone and run. Allow camera access to enable blink detection. For distribution, use Xcode Archive and your team's App Store Connect configuration with Apple's currently required Xcode and iOS SDK versions.
 
-Use the supplied export command rather than Unity's generic Build button. It selects `StaredownMobile.unity`, adds `STARE_MOBILE`, excludes headset-only runtime resources, links the native camera frameworks, and merges SDK privacy declarations. It restores the shared project's original settings afterward. Default export settings currently create a development build.
+Use the supplied export command rather than Unity's generic Build button. It selects `StaredownMobile.unity`, adds `STARE_MOBILE`, excludes headset-only runtime resources, links the native camera frameworks, and merges SDK privacy declarations. It restores the shared project's original settings afterward. Phone exports now use release build settings. See `VALIDATION.md` for the camera, microphone, names, and rendering changes in version 1.1.0.
 
 The Mac used for the original export had Xcode 16.2/iOS SDK 18.2. Native compilation and development signing succeeded there; that toolchain was not sufficient for the App Store Connect requirements encountered during the earlier TestFlight attempt. No TestFlight upload is included in this repository.
 
@@ -42,6 +42,6 @@ The Mac used for the original export had Xcode 16.2/iOS SDK 18.2. Native compila
 
 ## Validation status
 
-The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Physical iPhone camera accuracy, installation, and sustained performance still need device validation. This GitHub snapshot includes later shared-game changes; it has not been rebuilt into a new IPA during upload.
+The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Physical iPhone camera accuracy, installation, and sustained performance still need device validation. The latest Unity iPhone export is version 1.1.0 build 2 and passed its export checks; no new native IPA or TestFlight upload has been produced. See `VALIDATION.md`.
 
 `SOURCE_SNAPSHOT.json` identifies the local source checkpoint used for this upload. No open-source license is granted to the game or bundled third-party content by uploading it here.

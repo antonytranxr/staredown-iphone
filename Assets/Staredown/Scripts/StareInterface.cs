@@ -9,14 +9,17 @@ namespace Staredown
   static readonly Color UISurface=new Color(.037f,.052f,.081f), UIRaised=new Color(.054f,.073f,.105f);
   readonly Dictionary<Font,Material> interfaceFonts=new Dictionary<Font,Material>();
   bool uiFontHook;
-  Transform lobbyContents,joinPanel,settingsPanel,homeActions,roomActions,openingInstructions;
+  Transform lobbyContents,joinPanel,settingsPanel,homeActions,roomActions,openingInstructions,namePanel;
+  TextMesh playerNameLabel,nameDraftLabel,nameLengthLabel;StareButton nameSaveButton;string nameDraft="";
+  public bool NamePanelVisible=>namePanel!=null&&namePanel.gameObject.activeSelf;
+  public string NameDraft=>nameDraft;
   TextMesh fpsSettingLabel;StareButton botFillButton;Transform danceChoices,skinsPanel;TextMesh progressionLabel,skinStatus;readonly List<StareButton> skinChoices=new List<StareButton>();
   Transform danceAnchor;
   Transform openingVideo,inputLesson,controllerLesson,handLesson;TextMesh lessonTitle,lessonBody,lessonHint,openingModeLabel,calibrateLabel;StareButton openingPlay;
   public bool DanceChoicesVisible=>danceChoices!=null&&danceChoices.gameObject.activeSelf;
   public bool DanceAttachedTo(Transform anchor)=>DanceChoicesVisible&&danceChoices.parent==anchor;
   public bool DanceFromWrist=>DanceChoicesVisible&&danceChoices.parent==wristDance.transform;
-  public void HideAuxiliaryPanels(){if(danceChoices!=null)danceChoices.gameObject.SetActive(false);if(skinsPanel!=null)skinsPanel.gameObject.SetActive(false);}
+  public void HideAuxiliaryPanels(){if(danceChoices!=null)danceChoices.gameObject.SetActive(false);if(skinsPanel!=null)skinsPanel.gameObject.SetActive(false);if(NamePanelVisible)ShowNamePanel(false);}
   public bool SkinsVisible=>skinsPanel!=null&&skinsPanel.gameObject.activeSelf;
   public bool OpeningInstructionsVisible=>openingInstructions!=null&&openingInstructions.gameObject.activeSelf;
   public void SetFpsLabel(bool shown){if(fpsSettingLabel!=null)fpsSettingLabel.text=shown?"FPS counter: On":"FPS counter: Off";}
@@ -112,10 +115,11 @@ namespace Staredown
    exploreButton=UIButton("Explore arena","explore",roomActions,new Vector3(-.83f,-.78f,-.065f),new Vector2(1.55f,.37f));
    leaveMatchButton=UIButton("Leave room","leave",roomActions,new Vector3(.83f,-.78f,-.065f),new Vector2(1.55f,.37f));
    roomActions.gameObject.SetActive(false);
-   profileName=UIButton("Frost","characters",lobbyContents,new Vector3(-.83f,-1.38f,-.065f),new Vector2(1.55f,.29f)).GetComponentInChildren<TextMesh>();
-   UIButton("Settings","settings",lobbyContents,new Vector3(.83f,-1.38f,-.065f),new Vector2(1.55f,.29f));
+   profileName=UIButton("Frost","characters",lobbyContents,new Vector3(-1.10f,-1.38f,-.065f),new Vector2(1.02f,.29f)).GetComponentInChildren<TextMesh>();
+   playerNameLabel=UIButton("Your name","name-panel",lobbyContents,new Vector3(0,-1.38f,-.065f),new Vector2(1.02f,.29f)).GetComponentInChildren<TextMesh>();playerNameLabel.characterSize=.029f*.42f;SetPlayerNameLabel(StarePlayerName.Saved);
+   UIButton("Settings","settings",lobbyContents,new Vector3(1.10f,-1.38f,-.065f),new Vector2(1.02f,.29f));
    lobbyStatus=UILabel("Choose how to play",lobbyContents,new Vector3(0,-1.12f,-.05f),.021f,UIMuted,false,TextAnchor.MiddleCenter);
-   BuildJoinPanel();BuildSettingsPanel();BuildCharacterSelection();BuildMatchMenu();BuildOpeningInstructions();
+   BuildJoinPanel();BuildSettingsPanel();BuildNamePanel();BuildCharacterSelection();BuildMatchMenu();BuildOpeningInstructions();
   }
   void BuildOpeningInstructions()
   {
@@ -141,6 +145,7 @@ namespace Staredown
   public void ShowOpeningInstructions(bool shown)
   {
    if(openingInstructions==null)return;openingInstructions.gameObject.SetActive(shown);
+   if(namePanel!=null)namePanel.gameObject.SetActive(false);
    foreach(var label in menu.GetComponentsInChildren<TextMesh>(true))if(label.transform.parent==menu)label.gameObject.SetActive(!shown);var mark=menu.Find("Staredown eye mark");if(mark!=null)mark.gameObject.SetActive(!shown);
    joinPanel.gameObject.SetActive(false);foreach(var button in settingsPanel.GetComponentsInChildren<StareButton>())if(button.action=="skins"||button.action=="how-to-play"||button.action=="settings-back")button.GetComponentInChildren<TextMesh>().characterSize=.029f*.42f;
    settingsPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown);
@@ -165,6 +170,55 @@ namespace Staredown
    UIButton("Back","join-back",joinPanel,new Vector3(-.83f,-1.38f,-.07f),new Vector2(1.55f,.29f));
    joinCodeButton=UIButton("Join","join",joinPanel,new Vector3(.83f,-1.38f,-.07f),new Vector2(1.55f,.29f),true);
    joinPanel.gameObject.SetActive(false);
+  }
+  void BuildNamePanel()
+  {
+   namePanel=Group("Choose your player name",menu,new Vector3(0,0,-.15f));
+   UILabel("Your name.",namePanel,new Vector3(0,.99f,-.04f),.070f,UIInk,true,TextAnchor.MiddleCenter);
+   UILabel("Shown above your avatar to everyone in the room.",namePanel,new Vector3(0,.73f,-.04f),.028f,UIMuted,false,TextAnchor.MiddleCenter);
+   Panel("Player name field",namePanel,new Vector3(0,.44f,-.04f),new Vector2(3.22f,.34f),UISurface,UIAccent,.06f);
+   nameDraftLabel=UILabel("",namePanel,new Vector3(0,.44f,-.07f),.070f,UIInk,true,TextAnchor.MiddleCenter);
+   nameLengthLabel=UILabel("",namePanel,new Vector3(1.58f,.20f,-.07f),.021f,UIMuted,false,TextAnchor.MiddleRight);
+   string[] rows={"1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"};
+   for(int row=0;row<rows.Length;row++)
+   {
+    float start=-(rows[row].Length-1)*.16f;
+    for(int column=0;column<rows[row].Length;column++)
+    {
+     string key=rows[row][column].ToString();
+     UIButton(key,"name-key:"+key,namePanel,new Vector3(start+column*.32f,.08f-row*.26f,-.06f),new Vector2(.285f,.225f));
+    }
+   }
+   foreach(var choice in new[]{new[]{"Clear","CLEAR"},new[]{"Space","SPACE"},new[]{"Delete","DEL"}})
+   {
+    int index=choice[1]=="CLEAR"?-1:choice[1]=="SPACE"?0:1;
+    var key=UIButton(choice[0],"name-key:"+choice[1],namePanel,new Vector3(index*1.1f,-1.00f,-.06f),new Vector2(1.02f,.23f));key.GetComponentInChildren<TextMesh>().characterSize=.031f*.42f;
+   }
+   UIButton("Cancel","name-back",namePanel,new Vector3(-.83f,-1.38f,-.07f),new Vector2(1.55f,.29f));
+   nameSaveButton=UIButton("Save name","name-save",namePanel,new Vector3(.83f,-1.38f,-.07f),new Vector2(1.55f,.29f),true);
+   namePanel.gameObject.SetActive(false);
+  }
+  public void SetPlayerNameLabel(string value){if(playerNameLabel!=null)playerNameLabel.text="Name: "+StarePlayerName.Clean(value);}
+  public void ShowNamePanel(bool shown,string initial="")
+  {
+   if(namePanel==null)return;
+   if(shown){ShowOpeningInstructions(false);nameDraft=StarePlayerName.Clean(initial);UpdateNameDraft();}
+   namePanel.gameObject.SetActive(shown);joinPanel.gameObject.SetActive(false);settingsPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown&&!OpeningInstructionsVisible);
+  }
+  public void EditPlayerName(string key)
+  {
+   if(!NamePanelVisible)return;
+   if(key=="CLEAR")nameDraft="";
+   else if(key=="DEL"){if(nameDraft.Length>0)nameDraft=nameDraft.Substring(0,nameDraft.Length-1);}
+   else if(key=="SPACE"){if(nameDraft.Length>0&&nameDraft.Length<StarePlayerName.MaxLength&&!nameDraft.EndsWith(" "))nameDraft+=" ";}
+   else if(key.Length==1&&StarePlayerName.InputCharacter(key[0])&&nameDraft.Length<StarePlayerName.MaxLength)nameDraft+=key;
+   UpdateNameDraft();
+  }
+  void UpdateNameDraft()
+  {
+   nameDraftLabel.text=nameDraft.Length>0?nameDraft:"Enter your name";nameDraftLabel.color=nameDraft.Length>0?UIInk:UIMuted;
+   nameLengthLabel.text=nameDraft.Length+" / "+StarePlayerName.MaxLength;
+   nameSaveButton.Interactable=StarePlayerName.Clean(nameDraft).Length>0;
   }
   void BuildSettingsPanel()
   {
@@ -197,8 +251,8 @@ namespace Staredown
   {if(settingsDance!=null){settingsDance.Interactable=allowed;settingsDance.SetSelected(dancing);}if(matchDance!=null){matchDance.Interactable=allowed;matchDance.SetSelected(dancing);}}
   public void SetSettingsStatus(string message){if(settingsStatus!=null)settingsStatus.text=message;}
   public void SetJoinStatus(string message){if(joinNoticeLabel!=null)joinNoticeLabel.text=message;}
-  public void ShowJoinPanel(bool shown){if(joinPanel==null)return;joinPanel.gameObject.SetActive(shown);settingsPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown&&!OpeningInstructionsVisible);if(shown)SetJoinStatus("");}
-  public void ShowSettingsPanel(bool shown){if(settingsPanel==null)return;settingsPanel.gameObject.SetActive(shown);joinPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown&&!OpeningInstructionsVisible);}
+  public void ShowJoinPanel(bool shown){if(joinPanel==null)return;if(namePanel!=null)namePanel.gameObject.SetActive(false);joinPanel.gameObject.SetActive(shown);settingsPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown&&!OpeningInstructionsVisible);if(shown)SetJoinStatus("");}
+  public void ShowSettingsPanel(bool shown){if(settingsPanel==null)return;if(namePanel!=null)namePanel.gameObject.SetActive(false);settingsPanel.gameObject.SetActive(shown);joinPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown&&!OpeningInstructionsVisible);}
   public void UpdateLobbyAvailability(bool host,bool connected,ArenaState state)
   {
    bool ready=host&&state.phase==(int)MatchPhase.Lobby&&state.fighters.Length>=2;

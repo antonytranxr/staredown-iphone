@@ -16,12 +16,12 @@ namespace Staredown
         static readonly Color Muted = new Color(.67f, .77f, .82f);
         StareMobileSession session;
         Canvas canvas;
-        RectTransform safe, home, roomBar, cameraPanel, dancePicker;
+        RectTransform safe, home, roomBar, cameraPanel, dancePicker, nameEditor, voicePanel;
         Text roomLabel, roomStatus, homeStatus, caption, movementHint, lookHint, cameraStatus, cameraPrivacy, cameraTag;
-        Text cameraToggleLabel, startLabel, fillLabel;
+        Text cameraToggleLabel, startLabel, fillLabel, nameButtonLabel, micButtonLabel, voiceStatus;
         RawImage preview;
-        InputField code;
-        Button practice, host, join, leave, start, fill, dance, cameraToggle, calibrate;
+        InputField code, playerName, nameEditorInput;
+        Button practice, host, join, leave, start, fill, dance, cameraToggle, calibrate, editPlayerName, mic;
         StareMobileJoystick joystick;
         StareMobileLookPad lookPad;
         Font regular, bold;
@@ -35,6 +35,8 @@ namespace Staredown
         public int LookPointerId => lookPad != null ? lookPad.PointerId : int.MinValue;
         public StareMobileJoystick MovementControl => joystick;
         public StareMobileLookPad LookControl => lookPad;
+        public InputField PlayerNameInput => playerName;
+        public bool NameEditorVisible => nameEditor != null && nameEditor.gameObject.activeSelf;
 
         public void Initialize(StareMobileSession owner)
         {
@@ -51,7 +53,7 @@ namespace Staredown
             scaler.matchWidthOrHeight = .5f;
             safe = LayoutRect("Safe area", root.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             EnsureEvents();
-            BuildLook(); BuildHome(); BuildRoom(); BuildCamera(); BuildControls();
+            BuildLook(); BuildHome(); BuildRoom(); BuildCamera(); BuildControls(); BuildNameEditor();
             UpdateSafeArea(); Update();
         }
 
@@ -72,28 +74,32 @@ namespace Staredown
 
         void BuildHome()
         {
-            home = Box("Join the arena", safe, new Vector2(0, .5f), new Vector2(34, 0), new Vector2(480, 598), new Vector2(0, .5f), Ink);
+            home = Box("Join the arena", safe, new Vector2(0, .5f), new Vector2(34, 0), new Vector2(480, 660), new Vector2(0, .5f), Ink);
             Label("STAREDOWN", home, new Vector2(28, -28), new Vector2(424, 48), 39, Color.white, true);
             Label("PHONE × VR", home, new Vector2(30, -84), new Vector2(420, 26), 18, Cyan, true);
             Label("Keep your eyes open longer\nthan your opponent.", home, new Vector2(30, -137), new Vector2(420, 82), 28, Color.white, true);
-            Label("Enable your front camera.\nLook forward with eyes open.", home, new Vector2(30, -229), new Vector2(420, 65), 22, Muted);
-            practice = ButtonElement("Practice with bots", home, new Vector2(28, -321), new Vector2(424, 60), () => session.Practice(), true);
-            host = ButtonElement("Create a room", home, new Vector2(28, -395), new Vector2(424, 60), () => session.Host());
-            var field = Box("Four digit room code", home, new Vector2(0, 1), new Vector2(28, -472), new Vector2(266, 60), new Vector2(0, 1), Surface);
+            playerName = NameField(home, new Vector2(28, -231), new Vector2(424, 54));
+            playerName.onEndEdit.AddListener(value => { session.SetPlayerName(value); playerName.SetTextWithoutNotify(session.PlayerName); });
+            Label("Keep your face in view.\nLeave the camera and you lose.", home, new Vector2(30, -299), new Vector2(420, 60), 22, Muted);
+            practice = ButtonElement("Practice with bots", home, new Vector2(28, -370), new Vector2(424, 60), () => { SaveHomeName(); session.Practice(); }, true);
+            host = ButtonElement("Create a room", home, new Vector2(28, -443), new Vector2(424, 60), () => { SaveHomeName(); session.Host(); });
+            var field = Box("Four digit room code", home, new Vector2(0, 1), new Vector2(28, -516), new Vector2(266, 60), new Vector2(0, 1), Surface);
             code = field.gameObject.AddComponent<InputField>(); code.characterLimit = StareRelayNetwork.CodeLength;
             code.contentType = InputField.ContentType.IntegerNumber; code.keyboardType = TouchScreenKeyboardType.NumberPad;
             var value = Label("", field, new Vector2(18, -7), new Vector2(230, 47), 28, Color.white, true);
             var placeholder = Label("Room code", field, new Vector2(18, -7), new Vector2(230, 47), 24, Muted);
             code.textComponent = value; code.placeholder = placeholder; code.targetGraphic = field.GetComponent<Image>();
-            join = ButtonElement("Join", home, new Vector2(308, -472), new Vector2(144, 60), () => session.Join(code.text), true);
-            homeStatus = Label("4 digits · play together from any Wi-Fi", home, new Vector2(29, -545), new Vector2(423, 44), 18, Muted);
+            join = ButtonElement("Join", home, new Vector2(308, -516), new Vector2(144, 60), () => { SaveHomeName(); session.Join(code.text); }, true);
+            homeStatus = Label("4 digits · play together from any Wi-Fi", home, new Vector2(29, -589), new Vector2(423, 44), 18, Muted);
         }
 
         void BuildRoom()
         {
             roomBar = Box("Room toolbar", safe, new Vector2(0, 1), new Vector2(26, -22), new Vector2(770, 88), new Vector2(0, 1), Ink);
             roomLabel = Label("", roomBar, new Vector2(18, -12), new Vector2(308, 33), 27, Color.white, true);
-            roomStatus = Label("", roomBar, new Vector2(18, -49), new Vector2(344, 28), 18, Muted);
+            roomStatus = Label("", roomBar, new Vector2(18, -49), new Vector2(176, 28), 18, Muted);
+            editPlayerName = ButtonElement("Your name", roomBar, new Vector2(198, -48), new Vector2(164, 28), () => ShowNameEditor(true));
+            nameButtonLabel = editPlayerName.GetComponentInChildren<Text>();nameButtonLabel.fontSize=14;nameButtonLabel.resizeTextForBestFit=true;nameButtonLabel.resizeTextMinSize=10;nameButtonLabel.resizeTextMaxSize=14;
             fill = ButtonElement("Bots: on", roomBar, new Vector2(384, -18), new Vector2(135, 52), () => session.Act("bot-fill"));
             fillLabel = fill.GetComponentInChildren<Text>();
             start = ButtonElement("Start", roomBar, new Vector2(530, -18), new Vector2(102, 52), () => session.StartMatch(), true);
@@ -101,6 +107,38 @@ namespace Staredown
             leave = ButtonElement("Leave", roomBar, new Vector2(643, -18), new Vector2(106, 52), () => session.Leave());
             var center = Box("Match caption", safe, new Vector2(.5f, 1), new Vector2(0, -125), new Vector2(590, 60), new Vector2(.5f, 1), Ink);
             caption = Label("", center, new Vector2(12, -9), new Vector2(566, 42), 27, Color.white, true, TextAnchor.MiddleCenter);
+            voicePanel=Box("Room microphone",safe,new Vector2(0,1),new Vector2(26,-118),new Vector2(400,83),new Vector2(0,1),Ink);
+            mic=ButtonElement("Mic: On",voicePanel,new Vector2(12,-12),new Vector2(112,58),()=>session.Act("mic"));micButtonLabel=mic.GetComponentInChildren<Text>();micButtonLabel.fontSize=17;
+            voiceStatus=Label("Connecting voice…",voicePanel,new Vector2(137,-12),new Vector2(249,59),15,Muted);voicePanel.gameObject.SetActive(false);
+        }
+
+        InputField NameField(Transform parent,Vector2 position,Vector2 size)
+        {
+            var field=Box("Player name",parent,new Vector2(0,1),position,size,new Vector2(0,1),Surface);
+            var input=field.gameObject.AddComponent<InputField>();input.characterLimit=StarePlayerName.MaxLength;input.contentType=InputField.ContentType.Standard;input.lineType=InputField.LineType.SingleLine;input.keyboardType=TouchScreenKeyboardType.Default;
+            var value=Label("",field,new Vector2(16,-7),new Vector2(size.x-32,size.y-12),25,Color.white,true);
+            var placeholder=Label("Your name",field,new Vector2(16,-7),new Vector2(size.x-32,size.y-12),23,Muted);
+            input.textComponent=value;input.placeholder=placeholder;input.targetGraphic=field.GetComponent<Image>();input.SetTextWithoutNotify(StarePlayerName.Saved);
+            input.onValidateInput=(text,index,character)=>StarePlayerName.InputCharacter(character)&&!char.IsControl(character)?character:'\0';
+            return input;
+        }
+        void SaveHomeName(){session.SetPlayerName(playerName.text);playerName.SetTextWithoutNotify(session.PlayerName);}
+        void BuildNameEditor()
+        {
+            nameEditor=Box("Edit player name",safe,new Vector2(.5f,1),new Vector2(0,-210),new Vector2(480,206),new Vector2(.5f,1),Ink);
+            Label("Your name",nameEditor,new Vector2(24,-17),new Vector2(432,32),27,Color.white,true);
+            nameEditorInput=NameField(nameEditor,new Vector2(24,-64),new Vector2(432,54));
+            Label("Shown above your avatar",nameEditor,new Vector2(24,-119),new Vector2(432,22),15,Muted);
+            ButtonElement("Cancel",nameEditor,new Vector2(24,-153),new Vector2(205,40),()=>ShowNameEditor(false)).GetComponentInChildren<Text>().fontSize=19;
+            ButtonElement("Save name",nameEditor,new Vector2(242,-153),new Vector2(214,40),()=>{session.SetPlayerName(nameEditorInput.text);playerName.SetTextWithoutNotify(session.PlayerName);ShowNameEditor(false);},true).GetComponentInChildren<Text>().fontSize=19;
+            nameEditor.gameObject.SetActive(false);
+        }
+        public void ShowNameEditor(bool shown)
+        {
+            if(nameEditor==null)return;
+            if(shown){nameEditorInput.SetTextWithoutNotify(session.PlayerName);joystick?.Release();lookPad?.Release();}
+            else nameEditorInput.DeactivateInputField();
+            nameEditor.gameObject.SetActive(shown);
         }
 
         void BuildCamera()
@@ -151,9 +189,10 @@ namespace Staredown
             bool connected = session.Connected;
             home.gameObject.SetActive(!connected); roomBar.gameObject.SetActive(connected);
             homeStatus.text = string.IsNullOrEmpty(session.Status) ? "4 digits · play together from any Wi-Fi" : session.Status;
-            lookPad.gameObject.SetActive(connected);
+            bool naming=NameEditorVisible;
+            lookPad.gameObject.SetActive(connected&&!naming);
             lookHint.gameObject.SetActive(connected);
-            joystick.gameObject.SetActive(connected && session.CanMove);
+            joystick.gameObject.SetActive(connected && session.CanMove&&!naming);
             dance.gameObject.SetActive(connected); dance.interactable = session.CanDance;
             if (!connected || !session.CanDance) dancePicker.gameObject.SetActive(false);
             practice.interactable = host.interactable = !session.Busy;
@@ -161,6 +200,13 @@ namespace Staredown
             leave.interactable = !session.Busy;
             var state = session.State ?? new ArenaState();
             bool lobby = state.phase == (int)MatchPhase.Lobby;
+            editPlayerName.gameObject.SetActive(lobby);nameButtonLabel.text="Name: "+session.PlayerName;
+            if(!connected||!lobby){ShowNameEditor(false);}
+            voicePanel.gameObject.SetActive(connected&&!string.IsNullOrEmpty(session.RoomCode));
+            var voice=session.Voice;
+            mic.interactable=voice!=null&&session.Connected;
+            micButtonLabel.text=voice==null?"Mic":!voice.MicPermissionGranted?"Enable mic":voice.MicMuted?"Unmute":"Mute mic\n"+new string('|',Mathf.RoundToInt(voice.LocalMouth*6));
+            voiceStatus.text=voice!=null?voice.Status:"Connecting proximity voice…";
             roomLabel.text = string.IsNullOrEmpty(session.RoomCode) ? "PRACTICE" : "ROOM " + session.RoomCode;
             roomStatus.text = session.Busy ? session.Status : state.fighters.Count(f => !f.bot) + " players · " + state.fighters.Count(f => f.bot) + " bots";
             start.gameObject.SetActive(session.Hosting && (lobby || state.phase == (int)MatchPhase.Champion));
@@ -177,7 +223,7 @@ namespace Staredown
             bool live = running && connected && !string.IsNullOrEmpty(session.RoomCode);
             cameraTag.text = live ? "● LIVE · FRONT CAMERA" : running ? "FRONT CAMERA · PREVIEW" : "FRONT CAMERA";
             cameraStatus.text = camera != null ? camera.Status : "Camera unavailable on this device";
-            cameraPrivacy.text = live ? "Your face is shared with this room." : running ? "Preview only until you join a room." : "Enable camera to detect your blinks.";
+            cameraPrivacy.text = live ? "Your camera is live in this room." : running ? "Preview only until you join a room." : "Enable camera to detect your blinks.";
             cameraToggleLabel.text = running ? "Camera off" : "Enable camera";
             calibrate.interactable = running;
             preview.texture = camera != null ? camera.Preview : null;
@@ -193,11 +239,11 @@ namespace Staredown
                 var winner = state.fighters.FirstOrDefault(f => f.id == state.winner);
                 return state.winner == local.id ? "You are the champion!" : (winner != null ? winner.name + " wins!" : "Match complete");
             }
-            if (!local.alive) return "You're out · explore outside the fields";
+            if (!local.alive) return local.status!=null&&local.status.StartsWith("FACE LOST")?"Face left camera · you're out":"You're out · explore outside the fields";
             bool active = local.pair >= 0 && local.pair < state.pairs.Length && state.pairs[local.pair].winner < 0;
             if (active && state.trackingPaused) return "Tracking paused · look at your camera";
             if (active && state.phase == (int)MatchPhase.Countdown) return "Blink now · starts in " + Mathf.CeilToInt(state.remaining);
-            if (active && state.phase == (int)MatchPhase.Duel) return "Keep your eyes open";
+            if (active && state.phase == (int)MatchPhase.Duel) return !local.valid?"Face not visible · return now or you lose":"Keep your eyes open";
             if (state.phase == (int)MatchPhase.Lobby) return !local.ready || !local.valid ? "Look forward with eyes open to calibrate" : "Ready · explore while the host prepares";
             return "You advanced · next round soon";
         }

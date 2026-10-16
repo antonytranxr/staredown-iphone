@@ -85,11 +85,11 @@ namespace Staredown
    if(host)
    {
     owner=authority.Find(sender);
-    if(owner==null||owner.bot||owner.disconnected||!owner.phoneCamera||!owner.valid||message.id!=sender)return true;
+    if(owner==null||owner.bot||owner.disconnected||!owner.phoneCamera||message.id!=sender)return true;
    }
    else
    {
-    if(sender!=0||!profiles.Contains(message.id)||!roster.TryGetValue(message.id,out owner)||owner.bot||!owner.phoneCamera||!owner.valid)return true;
+    if(sender!=0||!profiles.Contains(message.id)||!roster.TryGetValue(message.id,out owner)||owner.bot||owner.disconnected||!owner.phoneCamera)return true;
    }
    byte[] bytes;if(!StareCameraFrameValidation.Decode(message,out bytes))return true;
    if(!Accept(message.id,message.cameraSequence,bytes,host))return true;
@@ -128,7 +128,7 @@ namespace Staredown
    Fighter fighter=null;
    if(localId<0||Time.unscaledTime<publishAt)return;
    if(authority!=null)fighter=authority.Find(localId);else roster.TryGetValue(localId,out fighter);
-   if(fighter==null||fighter.bot||fighter.disconnected||!fighter.phoneCamera||!fighter.valid)return;
+   if(fighter==null||fighter.bot||fighter.disconnected||!fighter.phoneCamera)return;
    int width,height;if(!StareCameraFrameValidation.Jpeg(jpeg,out width,out height))return;
    if(publishSequence==int.MaxValue)return;
    var message=new WireMessage{kind="cameraFrame",id=localId,cameraSequence=++publishSequence,cameraFrame=Convert.ToBase64String(jpeg)};
@@ -147,7 +147,7 @@ namespace Staredown
     roster[fighter.id]=fighter;
     if(fighter.phoneCamera&&!fighter.bot&&!disabledProfiles.Contains(fighter.id))profiles.Add(fighter.id);else profiles.Remove(fighter.id);
     if(visuals==null)continue;var avatar=visuals.AvatarFor(fighter.id);if(avatar==null)continue;
-    Feed feed;bool live=profiles.Contains(fighter.id)&&fighter.phoneCamera&&!fighter.bot&&!fighter.disconnected&&fighter.valid&&feeds.TryGetValue(fighter.id,out feed)&&feed.texture!=null&&Time.unscaledTime-feed.received<=StareCameraFrameValidation.FreshSeconds;
+    Feed feed;bool live=profiles.Contains(fighter.id)&&fighter.phoneCamera&&!fighter.bot&&!fighter.disconnected&&feeds.TryGetValue(fighter.id,out feed)&&feed.texture!=null&&Time.unscaledTime-feed.received<=StareCameraFrameValidation.FreshSeconds;
     if(live)
     {
      if(avatar.cameraHead==null){avatar.cameraHead=avatar.root.gameObject.AddComponent<StareCameraHead>();avatar.cameraHead.Bind(avatar);}

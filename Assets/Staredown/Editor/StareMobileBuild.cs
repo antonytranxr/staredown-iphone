@@ -14,9 +14,12 @@ using Staredown;
 
 public static class StareMobileBuild
 {
+ public const string Version="1.1.0";
+ public const int AndroidCode=2;
+ public const string IOSBuildNumber="2";
  public const string Scene="Assets/Staredown/Scenes/StaredownMobile.unity";
  public static bool BuildingMobile {get;private set;}
- const string PhoneManifest="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" android:installLocation=\"auto\"><uses-permission android:name=\"android.permission.INTERNET\"/><uses-permission android:name=\"android.permission.CAMERA\"/><uses-feature android:name=\"android.hardware.camera.front\" android:required=\"false\"/><application android:label=\"@string/app_name\" android:icon=\"@mipmap/app_icon\" android:allowBackup=\"false\"><activity android:name=\"com.unity3d.player.UnityPlayerGameActivity\" android:theme=\"@style/BaseUnityGameActivityTheme\" android:configChanges=\"locale|fontScale|keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode\" android:launchMode=\"singleTask\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\"/><category android:name=\"android.intent.category.LAUNCHER\"/></intent-filter><meta-data android:name=\"unityplayer.UnityActivity\" android:value=\"true\"/></activity><meta-data android:name=\"unityplayer.SkipPermissionsDialog\" android:value=\"true\"/></application></manifest>";
+ const string PhoneManifest="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" android:installLocation=\"auto\"><uses-permission android:name=\"android.permission.INTERNET\"/><uses-permission android:name=\"android.permission.CAMERA\"/><uses-permission android:name=\"android.permission.RECORD_AUDIO\"/><uses-feature android:name=\"android.hardware.camera.front\" android:required=\"false\"/><application android:label=\"@string/app_name\" android:icon=\"@mipmap/app_icon\" android:allowBackup=\"false\"><activity android:name=\"com.unity3d.player.UnityPlayerGameActivity\" android:theme=\"@style/BaseUnityGameActivityTheme\" android:configChanges=\"locale|fontScale|keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode\" android:launchMode=\"singleTask\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\"/><category android:name=\"android.intent.category.LAUNCHER\"/></intent-filter><meta-data android:name=\"unityplayer.UnityActivity\" android:value=\"true\"/></activity><meta-data android:name=\"unityplayer.SkipPermissionsDialog\" android:value=\"true\"/></application></manifest>";
  [MenuItem("Staredown/Create Mobile Scene")]
  public static void CreateScene()
  {
@@ -48,10 +51,10 @@ public static class StareMobileBuild
   try
   {
    BuildingMobile=true;xr.InitManagerOnStart=false;xr.Manager.TrySetLoaders(new System.Collections.Generic.List<UnityEngine.XR.Management.XRLoader>());EditorUtility.SetDirty(xr.Manager);EditorUtility.SetDirty(xr);
-   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion="1.0.0";PlayerSettings.productName="Staredown Mobile";PlayerSettings.Android.bundleVersionCode=1;PlayerSettings.Android.minSdkVersion=AndroidSdkVersions.AndroidApiLevel26;PlayerSettings.defaultInterfaceOrientation=UIOrientation.LandscapeLeft;
+   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion=Version;PlayerSettings.productName="Staredown Mobile";PlayerSettings.Android.bundleVersionCode=AndroidCode;PlayerSettings.Android.minSdkVersion=AndroidSdkVersions.AndroidApiLevel26;PlayerSettings.defaultInterfaceOrientation=UIOrientation.LandscapeLeft;
    PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android,false);PlayerSettings.SetGraphicsAPIs(BuildTarget.Android,new[]{UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3});plugin.DefineConstraints=new string[0];plugin.SetCompatibleWithPlatform(BuildTarget.Android,true);plugin.SaveAndReimport();
    File.WriteAllText(manifest,PhoneManifest);AssetDatabase.ImportAsset(manifest,ImportAssetOptions.ForceUpdate);AssetDatabase.SaveAssets();
-   var options=new BuildPlayerOptions{scenes=new[]{Scene},locationPathName=apk,target=BuildTarget.Android,options=BuildOptions.Development,extraScriptingDefines=new[]{"STARE_MOBILE"}};
+   var options=new BuildPlayerOptions{scenes=new[]{Scene},locationPathName=apk,target=BuildTarget.Android,options=BuildOptions.None,extraScriptingDefines=new[]{"STARE_MOBILE"}};
    var report=BuildPipeline.BuildPlayer(options);
    return report.summary.result+" errors="+report.summary.totalErrors+" warnings="+report.summary.totalWarnings+" duration="+report.summary.totalTime;
   }
@@ -75,7 +78,7 @@ public static class StareMobileBuild
   if(!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.iOS,BuildTarget.iOS))throw new Exception("Install matching Unity iOS Build Support through Unity Hub.");
   if(EditorUserBuildSettings.activeBuildTarget!=BuildTarget.iOS)throw new Exception("Switch the Unity Editor active platform to iOS before exporting the phone app.");
   if(!File.Exists(Scene))CreateScene();
-  var target=UnityEditor.Build.NamedBuildTarget.iOS;var id=PlayerSettings.GetApplicationIdentifier(target);var description=PlayerSettings.iOS.cameraUsageDescription;var microphone=PlayerSettings.iOS.microphoneUsageDescription;var stripping=PlayerSettings.GetManagedStrippingLevel(target);var minimum=PlayerSettings.iOS.targetOSVersionString;var version=PlayerSettings.bundleVersion;var product=PlayerSettings.productName;var orientation=PlayerSettings.defaultInterfaceOrientation;
+  var buildNumber=PlayerSettings.iOS.buildNumber;var target=UnityEditor.Build.NamedBuildTarget.iOS;var id=PlayerSettings.GetApplicationIdentifier(target);var description=PlayerSettings.iOS.cameraUsageDescription;var microphone=PlayerSettings.iOS.microphoneUsageDescription;var stripping=PlayerSettings.GetManagedStrippingLevel(target);var minimum=PlayerSettings.iOS.targetOSVersionString;var version=PlayerSettings.bundleVersion;var product=PlayerSettings.productName;var orientation=PlayerSettings.defaultInterfaceOrientation;
   const string nativePath="Assets/Plugins/iOS/StaredownMobileCamera.mm";
   var plugin=AssetImporter.GetAtPath(nativePath) as PluginImporter;if(plugin==null)throw new Exception("iPhone camera bridge was not imported");
   var constraints=plugin.DefineConstraints;bool compatible=plugin.GetCompatibleWithPlatform(BuildTarget.iOS);
@@ -86,7 +89,7 @@ public static class StareMobileBuild
   {
    BuildingMobile=true;PlayerSettings.SetManagedStrippingLevel(target,ManagedStrippingLevel.High);
    if(xr!=null){xr.InitManagerOnStart=false;EditorUtility.SetDirty(xr);if(xr.Manager!=null){xr.Manager.TrySetLoaders(new System.Collections.Generic.List<UnityEngine.XR.Management.XRLoader>());EditorUtility.SetDirty(xr.Manager);}}
-   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion="1.0.0";PlayerSettings.productName="Staredown Mobile";PlayerSettings.iOS.targetOSVersionString="14.0";PlayerSettings.iOS.cameraUsageDescription="Staredown uses your front camera to detect blinks and show your live face to players in your current room when you enable the camera.";PlayerSettings.iOS.microphoneUsageDescription="Staredown uses the microphone for optional in-game voice chat.";PlayerSettings.defaultInterfaceOrientation=UIOrientation.LandscapeLeft;
+   PlayerSettings.SetApplicationIdentifier(target,"com.antony.staredown.mobile");PlayerSettings.bundleVersion=Version;PlayerSettings.productName="Staredown Mobile";PlayerSettings.iOS.buildNumber=IOSBuildNumber;PlayerSettings.iOS.targetOSVersionString="14.0";PlayerSettings.iOS.cameraUsageDescription="Staredown uses your front camera to detect blinks and show your live face to players in your current room when you enable the camera.";PlayerSettings.iOS.microphoneUsageDescription="Staredown uses the microphone for optional in-game voice chat.";PlayerSettings.defaultInterfaceOrientation=UIOrientation.LandscapeLeft;
    plugin.DefineConstraints=new string[0];plugin.SetCompatibleWithPlatform(BuildTarget.iOS,true);plugin.SaveAndReimport();
    #if UNITY_IOS
    using(var privacy=PhoneSdkPrivacyScope.Begin())
@@ -94,7 +97,7 @@ public static class StareMobileBuild
    using(var hidden=PhoneMetaResources.Hide())
    {
     AssetDatabase.SaveAssets();
-    var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions{scenes=new[]{Scene},locationPathName=path,target=BuildTarget.iOS,extraScriptingDefines=new[]{"STARE_MOBILE"},options=BuildOptions.Development});
+    var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions{scenes=new[]{Scene},locationPathName=path,target=BuildTarget.iOS,extraScriptingDefines=new[]{"STARE_MOBILE"},options=BuildOptions.None});
     return report.summary.result+" errors="+report.summary.totalErrors+" warnings="+report.summary.totalWarnings+" duration="+report.summary.totalTime;
    }
   }
@@ -104,7 +107,7 @@ public static class StareMobileBuild
    var native=AssetImporter.GetAtPath(nativePath) as PluginImporter;native.DefineConstraints=constraints;native.SetCompatibleWithPlatform(BuildTarget.iOS,compatible);native.SaveAndReimport();
    var restored=UnityEditor.XR.Management.XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(BuildTargetGroup.iOS);
    if(restored!=null){restored.InitManagerOnStart=init;EditorUtility.SetDirty(restored);if(restored.Manager!=null){var fresh=loaders.Select(key=>AssetDatabase.LoadAllAssetsAtPath(key[0]).OfType<UnityEngine.XR.Management.XRLoader>().FirstOrDefault(loader=>loader.name==key[1])).ToList();if(fresh.Any(loader=>loader==null)||!restored.Manager.TrySetLoaders(fresh))throw new Exception("Could not restore iOS XR settings");EditorUtility.SetDirty(restored.Manager);}}
-   PlayerSettings.SetApplicationIdentifier(target,id);PlayerSettings.bundleVersion=version;PlayerSettings.productName=product;PlayerSettings.iOS.cameraUsageDescription=description;PlayerSettings.iOS.microphoneUsageDescription=microphone;PlayerSettings.SetManagedStrippingLevel(target,stripping);PlayerSettings.iOS.targetOSVersionString=minimum;PlayerSettings.defaultInterfaceOrientation=orientation;AssetDatabase.SaveAssets();
+   PlayerSettings.SetApplicationIdentifier(target,id);PlayerSettings.bundleVersion=version;PlayerSettings.productName=product;PlayerSettings.iOS.cameraUsageDescription=description;PlayerSettings.iOS.microphoneUsageDescription=microphone;PlayerSettings.iOS.buildNumber=buildNumber;PlayerSettings.SetManagedStrippingLevel(target,stripping);PlayerSettings.iOS.targetOSVersionString=minimum;PlayerSettings.defaultInterfaceOrientation=orientation;AssetDatabase.SaveAssets();
   }
  }
 

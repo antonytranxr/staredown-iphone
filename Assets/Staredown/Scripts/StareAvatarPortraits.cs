@@ -16,20 +16,20 @@ namespace Staredown
             if(!referenceBuilt||referenceEyeWall==null||!referenceEyeWall.gameObject.activeInHierarchy||left==null||right==null)
             {eyeMural.SetFloat("_LiveFeedReady",0);return;}
             if(Time.unscaledTime<nextEyeCapture)return;
-            nextEyeCapture=Time.unscaledTime+(Application.isMobilePlatform?.033f:.066f);
+            nextEyeCapture=Time.unscaledTime+(PhoneView?.083333f:Application.isMobilePlatform?.033f:.066f);
             if(eyeCapture==null)
             {
                 eyeCapture=Group("Finalist eye camera",transform,Vector3.zero).gameObject.AddComponent<Camera>();
                 eyeCapture.enabled=false;eyeCapture.stereoTargetEye=StereoTargetEyeMask.None;
                 eyeCapture.nearClipPlane=.015f;eyeCapture.farClipPlane=3;eyeCapture.fieldOfView=24;eyeCapture.aspect=2;
                 eyeCapture.clearFlags=CameraClearFlags.SolidColor;eyeCapture.backgroundColor=new Color(.012f,.022f,.035f);
-                eyeCapture.cullingMask=1<<29;eyeCapture.allowHDR=false;eyeCapture.allowMSAA=true;
+                eyeCapture.cullingMask=1<<29;eyeCapture.allowHDR=false;eyeCapture.allowMSAA=!PhoneView;
                 // Preserve the new facial detail on the large finals screen.
                 // The feeds still update at 15 Hz, independently of headset frames.
-                for(int i=0;i<2;i++){eyeFeeds[i]=new RenderTexture(1024,512,16){name="Finalist "+i+" eye feed",antiAliasing=2,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=4};eyeFeeds[i].Create();}
+                for(int i=0;i<2;i++){eyeFeeds[i]=new RenderTexture(PhoneView?512:1024,PhoneView?256:512,16){name="Finalist "+i+" eye feed",antiAliasing=PhoneView?1:2,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=PhoneView?2:4};eyeFeeds[i].Create();}
                 eyeMural.SetTexture("_LiveLeftTex",eyeFeeds[0]);eyeMural.SetTexture("_LiveRightTex",eyeFeeds[1]);
             }
-            if(Application.isMobilePlatform)
+            if(Application.isMobilePlatform||PhoneView)
             {
                 // Spread the two feeds across frames; each still updates at 15 Hz.
                 int index=nextEyeFeed;nextEyeFeed=1-nextEyeFeed;

@@ -36,6 +36,9 @@ public final class StaredownFaceDetector {
     }
     public static synchronized boolean readyForFrame() { return detector != null && !busy; }
     public static synchronized String poll() { return latest; }
+    public static synchronized String pollAfter(long previousSequence) {
+        return sequence > previousSequence ? latest : "";
+    }
 
     // ARGB rows start at the image top. Rotation is clockwise and unmirrored.
     public static synchronized void analyze(int[] argb, int width, int height, int rotation, double timestamp) {
