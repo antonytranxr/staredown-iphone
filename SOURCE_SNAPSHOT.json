@@ -1,10 +1,10 @@
 {
-  "source_commit": "c59203947115eb43133f87cb193769de9868c65a",
+  "source_commit": "95e6f8ee2aa7ff6a2c49ecd746d03341fb6130e5",
   "unity": "6000.2.7f2",
   "purpose": "Buildable iPhone app with shared VR game source",
   "generated_xcode_project_included": false,
   "signing_credentials_included": false,
   "quest_version": "1.18.0",
-  "phone_version": "1.1.0",
-  "phone_build": "2"
+  "phone_version": "1.1.1",
+  "phone_build": "3"
 }

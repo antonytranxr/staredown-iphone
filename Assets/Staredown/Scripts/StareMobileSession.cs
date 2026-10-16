@@ -8,7 +8,7 @@ namespace Staredown
  // This scene has an ordinary camera; no OVRCameraRig or XR runtime is started.
  public sealed class StareMobileSession : MonoBehaviour
  {
-  public const int RenderFrameRate=30,MaxRenderLongEdge=1280;
+  public const int RenderFrameRate=30,MaxRenderLongEdge=1280,RenderSamples=2;
   public Camera ViewCamera;
   public StareMobileCamera MobileCamera {get;private set;}
   public StareVoice Voice {get;private set;}
@@ -42,7 +42,7 @@ namespace Staredown
    if(ViewCamera==null){var go=new GameObject("Mobile arena camera");ViewCamera=go.AddComponent<Camera>();}
    if(ViewCamera.GetComponent<AudioListener>()==null)ViewCamera.gameObject.AddComponent<AudioListener>();
    ViewCamera.tag="MainCamera";ViewCamera.stereoTargetEye=StereoTargetEyeMask.None;ViewCamera.fieldOfView=65;ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=160;
-   ViewCamera.allowHDR=false;ViewCamera.allowMSAA=false;
+   ViewCamera.allowHDR=false;ViewCamera.allowMSAA=true;
    ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.identity);
    MobileCamera=gameObject.AddComponent<StareMobileCamera>();MobileCamera.FrameReady+=ForwardCamera;
    CameraHeads=gameObject.AddComponent<StareCameraStream>();
@@ -195,14 +195,16 @@ namespace Staredown
 #if STARE_MOBILE && !UNITY_EDITOR
    int thermal=MobileCamera!=null?MobileCamera.ThermalLevel:0;if(appliedThermal==thermal)return;appliedThermal=thermal;
    Application.targetFrameRate=thermal>=2?24:RenderFrameRate;
-   QualitySettings.vSyncCount=0;QualitySettings.antiAliasing=0;QualitySettings.softParticles=false;
+   // The built-in forward camera needs both this sample count and allowMSAA.
+   // Keep offscreen captures at their lower budgets; only the main view uses MSAA.
+   QualitySettings.vSyncCount=0;QualitySettings.antiAliasing=RenderSamples;QualitySettings.softParticles=false;
    QualitySettings.pixelLightCount=1;QualitySettings.shadowDistance=20;QualitySettings.shadowCascades=1;
    QualitySettings.shadows=ShadowQuality.HardOnly;QualitySettings.shadowResolution=ShadowResolution.Low;
    QualitySettings.lodBias=Mathf.Min(QualitySettings.lodBias,.85f);
    // Keep four skin weights: lowering them changes the repaired facial rigs.
    QualitySettings.skinWeights=SkinWeights.FourBones;
    var size=RenderResolution(Screen.width,Screen.height);if(size.x!=Screen.width||size.y!=Screen.height)Screen.SetResolution(size.x,size.y,FullScreenMode.FullScreenWindow);
-   Debug.Log("[STARE MOBILE PERFORMANCE] render="+size.x+"x"+size.y+" fps="+Application.targetFrameRate+" thermal="+thermal+" / eye capture remains independent");
+   Debug.Log("[STARE MOBILE PERFORMANCE] render="+size.x+"x"+size.y+" fps="+Application.targetFrameRate+" msaa="+QualitySettings.antiAliasing+" thermal="+thermal+" / eye capture remains independent");
 #endif
   }
   void OnApplicationPause(bool paused){if(paused){SendProfile(false);MobileCamera?.StopCamera();MoveInput=LookInput=Vector2.zero;}}

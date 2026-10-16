@@ -1,3 +1,13 @@
+# iPhone speaker and anti-aliasing update — 2026-10-15
+
+Phone source 1.1.1 build 3 adds a native iOS speaker fallback. If the active PlayAndRecord session routes exclusively to the built-in receiver, with no external microphone, the helper selects the built-in speaker. It monitors audio route changes and recovery without changing Vivox's category, mode or session activation. Headphones, Bluetooth, AirPlay and USB routes remain untouched. Diagnostic logs record port types and category/mode changes without device names or identifiers.
+
+The phone's main Built-in Forward camera now uses 2× MSAA, with HDR disabled. The existing 30 FPS / 1280-pixel-long-edge limits, thermal fallback and secondary-camera budgets remain. Quest rendering is unchanged.
+
+Native arm64/iOS compilation, exported bridge symbols, route-policy checks and 64 mocked voice lifecycle checks passed. The mobile scene passed 19 basic and 14 camera-continuity checks. Twenty-five AA checks passed on Metal: explicit 1×/2× frozen arena captures differ at 48,485 pixels; the opaque diagonal fixture has 0/279 partially covered pixels. This validates the rendering setup and sample resolve, not sustained phone GPU performance.
+
+Unity iPhone export 1.1.1 build 3 succeeded with zero errors. AVFoundation is linked and both native camera/audio bridges use ARC. Generated IL2CPP calls include the new audio entry points. No new native IPA or TestFlight upload has been produced. The paired iPhone was offline; speaker output, headphone transitions, voice quality and sustained heat/FPS still require physical-device validation. Android phone packaging remains deferred.
+
 # Phone and room update — 2026-10-15
 
 Phone source version 1.1.0 includes saved player names, voice-session initialization and real microphone permission checks, live video independent of face visibility, and reduced phone rendering/camera overhead.

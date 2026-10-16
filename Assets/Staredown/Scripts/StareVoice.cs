@@ -8,7 +8,7 @@ namespace Staredown
  {
   public const int AudibleDistance=18,ConversationalDistance=3;
   StareGame game;StareMobileSession mobile;string channel;bool editorMuted;
-  bool initialized,destroyed,hasFocus=true,paused,permissionChecked,micAllowed;float positionAt,retryAt,permissionAt,healthAt;int failures;bool transmissionDirty;Task operation;
+  bool initialized,destroyed,hasFocus=true,paused,permissionChecked,micAllowed,phoneAudioRoute;float positionAt,retryAt,permissionAt,healthAt;int failures;bool transmissionDirty;Task operation;
   bool Focused=>hasFocus&&!paused;
   bool HasOwner=>game!=null||mobile!=null;
   int LocalId=>game!=null?game.LocalId:mobile!=null?mobile.LocalId:-1;
@@ -32,9 +32,11 @@ namespace Staredown
   public string Channel=>channel;
   public bool Connected=>initialized&&channel!=null&&VivoxService.Instance.ActiveChannels.ContainsKey(channel);
   public int Participants=>Connected?VivoxService.Instance.ActiveChannels[channel].Count:0;
-  public void Initialize(StareGame owner){game=owner;mobile=null;LoadPreferences();}
+  public void Initialize(StareGame owner){StopPhoneAudioRoute();game=owner;mobile=null;LoadPreferences();}
   // Phone sessions have no OVRCameraRig, but use the same positional room and mic lifecycle.
-  public void Initialize(StareMobileSession owner){mobile=owner;game=null;LoadPreferences();}
+  public void Initialize(StareMobileSession owner){mobile=owner;game=null;LoadPreferences();if(!phoneAudioRoute&&owner!=null){phoneAudioRoute=true;StarePhoneAudioRoute.Begin();}}
+  void RefreshPhoneAudioRoute(){if(phoneAudioRoute)StarePhoneAudioRoute.Refresh();}
+  void StopPhoneAudioRoute(){if(phoneAudioRoute){phoneAudioRoute=false;StarePhoneAudioRoute.End();}}
   void LoadPreferences(){MicMuted=PlayerPrefs.GetInt("Staredown.MicMuted",0)!=0;VoiceEnabled=PlayerPrefs.GetInt("Staredown.VoiceEnabled",1)!=0;}
   string Desired=>!destroyed&&VoiceEnabled&&HasOwner&&LocalId>=0&&!string.IsNullOrEmpty(VoiceRoomId)?"staredown_"+VoiceRoomId:null;
   public void ToggleMic()
@@ -48,11 +50,11 @@ namespace Staredown
   void OnApplicationPause(bool isPaused){paused=isPaused;if(!isPaused)RequestRecovery();ApplyMute();}
   void RequestRecovery()
   {
-   if(destroyed)return;retryAt=0;transmissionDirty=true;
+   if(destroyed)return;retryAt=0;transmissionDirty=true;RefreshPhoneAudioRoute();
    if(permissionChecked)micAllowed=HasMicrophonePermission();
    ApplyMute();
   }
-  void InputDeviceChanged(){transmissionDirty=true;ApplyMute();}
+  void InputDeviceChanged(){transmissionDirty=true;ApplyMute();RefreshPhoneAudioRoute();}
   void ChannelLeft(string left){if(left==channel)RequestRecovery();}
   static bool HasMicrophonePermission()
   {
@@ -146,7 +148,7 @@ namespace Staredown
     if(Desired!=desired){await VivoxService.Instance.LeaveChannelAsync(desired);return;}
     // A successful join does not guarantee the SDK is still transmitting after focus/device recovery.
     await VivoxService.Instance.SetChannelTransmissionModeAsync(TransmissionMode.Single,desired);
-    channel=desired;failures=0;retryAt=0;transmissionDirty=false;SetPosition();ApplyMute();if(Debug.isDebugBuild)Debug.Log("[STARE VOICE] positional room connected / "+(mobile!=null?"phone":"headset")+" / mic permission="+micAllowed+" / muted="+VivoxService.Instance.IsInputDeviceMuted+" / "+Participants+" participant(s)");
+    channel=desired;failures=0;retryAt=0;transmissionDirty=false;SetPosition();ApplyMute();RefreshPhoneAudioRoute();if(Debug.isDebugBuild)Debug.Log("[STARE VOICE] positional room connected / "+(mobile!=null?"phone":"headset")+" / mic permission="+micAllowed+" / muted="+VivoxService.Instance.IsInputDeviceMuted+" / "+Participants+" participant(s)");
    }
    catch(Exception e){failures++;retryAt=Time.unscaledTime+Mathf.Min(15,Mathf.Pow(2,Mathf.Min(failures,4)));Status="VOICE RECONNECTING / CHECK INTERNET / RETRYING AUTOMATICALLY";Debug.LogWarning("[STARE VOICE] "+e.GetType().Name+": "+e.Message);}
    finally {if(destroyed)await Shutdown();}
@@ -157,6 +159,6 @@ namespace Staredown
    VivoxService.Instance.EffectiveInputDeviceChanged-=InputDeviceChanged;VivoxService.Instance.ConnectionRecovered-=RequestRecovery;VivoxService.Instance.ConnectionFailedToRecover-=RequestRecovery;VivoxService.Instance.LoggedIn-=InputDeviceChanged;VivoxService.Instance.LoggedOut-=RequestRecovery;VivoxService.Instance.ChannelLeft-=ChannelLeft;
    try{VivoxService.Instance.MuteInputDevice();if(channel!=null&&VivoxService.Instance.ActiveChannels.ContainsKey(channel))await VivoxService.Instance.LeaveChannelAsync(channel);channel=null;if(VivoxService.Instance.IsLoggedIn)await VivoxService.Instance.LogoutAsync();}catch(Exception){}
   }
-  async void OnDestroy(){destroyed=true;if(initialized){VivoxService.Instance.EffectiveInputDeviceChanged-=InputDeviceChanged;VivoxService.Instance.ConnectionRecovered-=RequestRecovery;VivoxService.Instance.ConnectionFailedToRecover-=RequestRecovery;VivoxService.Instance.LoggedIn-=InputDeviceChanged;VivoxService.Instance.LoggedOut-=RequestRecovery;VivoxService.Instance.ChannelLeft-=ChannelLeft;}ApplyMute();if(operation!=null&&!operation.IsCompleted)return;await Shutdown();}
+  async void OnDestroy(){destroyed=true;StopPhoneAudioRoute();if(initialized){VivoxService.Instance.EffectiveInputDeviceChanged-=InputDeviceChanged;VivoxService.Instance.ConnectionRecovered-=RequestRecovery;VivoxService.Instance.ConnectionFailedToRecover-=RequestRecovery;VivoxService.Instance.LoggedIn-=InputDeviceChanged;VivoxService.Instance.LoggedOut-=RequestRecovery;VivoxService.Instance.ChannelLeft-=ChannelLeft;}ApplyMute();if(operation!=null&&!operation.IsCompleted)return;await Shutdown();}
  }
 }
