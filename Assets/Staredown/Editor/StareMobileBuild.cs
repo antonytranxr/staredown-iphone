@@ -14,9 +14,9 @@ using Staredown;
 
 public static class StareMobileBuild
 {
- public const string Version="1.1.4";
+ public const string Version="1.1.5";
  public const int AndroidCode=2;
- public const string IOSBuildNumber="7";
+ public const string IOSBuildNumber="8";
  public const string Scene="Assets/Staredown/Scenes/StaredownMobile.unity";
  public static bool BuildingMobile {get;private set;}
  const string PhoneManifest="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" android:installLocation=\"auto\"><uses-permission android:name=\"android.permission.INTERNET\"/><uses-permission android:name=\"android.permission.CAMERA\"/><uses-permission android:name=\"android.permission.RECORD_AUDIO\"/><uses-feature android:name=\"android.hardware.camera.front\" android:required=\"false\"/><application android:label=\"@string/app_name\" android:icon=\"@mipmap/app_icon\" android:allowBackup=\"false\"><activity android:name=\"com.unity3d.player.UnityPlayerGameActivity\" android:theme=\"@style/BaseUnityGameActivityTheme\" android:configChanges=\"locale|fontScale|keyboard|keyboardHidden|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode\" android:launchMode=\"singleTask\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\"/><category android:name=\"android.intent.category.LAUNCHER\"/></intent-filter><meta-data android:name=\"unityplayer.UnityActivity\" android:value=\"true\"/></activity><meta-data android:name=\"unityplayer.SkipPermissionsDialog\" android:value=\"true\"/></application></manifest>";

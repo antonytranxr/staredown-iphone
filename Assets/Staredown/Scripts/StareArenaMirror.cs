@@ -70,11 +70,11 @@ namespace Staredown
   {
    if(rendering||source==null)return;rendering=true;bool invert=GL.invertCulling;
    if(capture==null){var node=new GameObject("Arena mirror capture");node.transform.SetParent(owner.transform,false);capture=node.AddComponent<Camera>();capture.enabled=false;for(int i=0;i<(phone?1:2);i++){feeds[i]=new RenderTexture(phone?512:1024,phone?768:1536,16){name="Arena mirror eye "+i,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=phone?2:4};feeds[i].Create();}surface.SetTexture("_MirrorLeft",feeds[0]);surface.SetTexture("_MirrorRight",phone?feeds[0]:feeds[1]);}
-   var local=owner.LocalAvatar;var detail=local!=null?local.preset.GetComponent<LODGroup>():null;if(detail!=null)detail.ForceLOD(0);
+   var local=owner.LocalAvatar;var detail=local!=null?local.preset.GetComponent<LODGroup>():null;if(detail!=null&&detail.enabled&&detail.gameObject.activeInHierarchy)detail.ForceLOD(0);
    owner.SetLocalMetaCapture(true);
    try
    {
-    capture.CopyFrom(source);capture.enabled=false;capture.stereoTargetEye=StereoTargetEyeMask.None;capture.allowHDR=false;capture.allowMSAA=false;capture.cullingMask=source.cullingMask&~((1<<CaptureSurfaceLayer)|(1<<2)|(1<<26));
+    capture.CopyFrom(source);capture.enabled=false;capture.stereoTargetEye=StereoTargetEyeMask.None;capture.allowHDR=false;capture.allowMSAA=false;capture.cullingMask=(source.cullingMask|(1<<StareCameraHead.FirstPersonLayer))&~((1<<CaptureSurfaceLayer)|(1<<2)|(1<<26));
     var reflection=Reflection(transform.forward,transform.position);
     bool stereo=source.stereoEnabled&&!phone;
     int count=stereo?2:1;
@@ -95,7 +95,7 @@ namespace Staredown
     if(count==1){surface.SetTexture("_MirrorRight",feeds[0]);surface.SetMatrix("_MirrorVPRight",GL.GetGPUProjectionMatrix(capture.projectionMatrix,true)*capture.worldToCameraMatrix);}
     surface.SetFloat("_MirrorReady",1);Captures++;
    }
-   finally{if(detail!=null)detail.ForceLOD(-1);owner.SetLocalMetaCapture(false);GL.invertCulling=invert;rendering=false;}
+   finally{if(detail!=null&&detail.enabled&&detail.gameObject.activeInHierarchy)detail.ForceLOD(-1);owner.SetLocalMetaCapture(false);GL.invertCulling=invert;rendering=false;}
   }
   void OnDestroy(){foreach(var feed in feeds)if(feed!=null){feed.Release();Destroy(feed);}if(capture!=null)Destroy(capture.gameObject);}
  }

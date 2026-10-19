@@ -1,3 +1,15 @@
+# Crossplay reliability — 2026-10-19
+
+Phone 1.1.5 build 8 pairs with Quest 1.18.3. Mobile losing blinks now carry capture-time eligibility, match/round/duel scope and a retried host acknowledgement rather than depending on the latest face pose. The phone now renders its own body and live camera head in the mirror while excluding its housing from first person. Voice is room-wide for this test, with output gain/mute recovery, output-device observers, receive activity and a reconnect control.
+
+All clients must update: room discovery is now `staredown-crossplatform-v8`, avoiding silent mixed positional/group voice channels. Four-digit room codes remain.
+
+Verification passed: 36 captured-blink authority/delivery checks, 3 camera-event provenance checks, 58 cadence/noise checks, 9 provider history checks, 35 headset regressions, 33 camera protocol checks, 76 mocked voice lifecycle checks across iOS/Android permission paths, 95 portrait/landscape UI checks and 5 voice-popup touch checks. A rendered mirror versus hidden-local-avatar control differed at 27,224 pixels. An actual TCP phone client lost by blink despite its latest sample being invalid. Live Lobby/Relay v8 and Vivox group join, gain repair, rejoin and microphone-mute preservation passed; this one-participant SDK check ran with editor audio muted and does not establish audibility.
+
+Unity 6000.3.26f1 exported 1.1.5 (8) successfully. All 33 scene lifecycle/native bridge/export checks passed. Generated IL2CPP includes the new blink delivery, host adjudication, local-head visibility and voice reconnect methods. Reports are in `Validation/`.
+
+No signed IPA or TestFlight upload was produced. The local toolchain remains Xcode 16.2. Physical iPhone ARKit blink accuracy, sustained performance/heat and four-person audio across all twelve directed speaker/listener paths remain unverified. Social video remains capped at six FPS; this build fixes lost captured events, rather than claiming higher camera or video rates.
+
 # Camera reliability and compact gameplay UI — 2026-10-19
 
 Version **1.1.4 (7)** preserves the player's camera-enabled choice across OS permission dialogs and foreground recovery. Explicit camera-off and first-launch opt-in remain respected. Joining or entering practice preserves capture; the home camera button opens its settings once enabled. The arena uses a slim room bar, a small expandable camera preview, temporary notices and Settings-only room/camera controls, leaving the center available for looking around.

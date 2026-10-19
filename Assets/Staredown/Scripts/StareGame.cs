@@ -134,6 +134,7 @@ namespace Staredown
    if(action.StartsWith("dance:")){int choice;if(CanDance&&int.TryParse(action.Substring(6),out choice)&&choice>=-1&&choice<=3){if(model!=null)model.Dance(localId,choice>=0,Mathf.Max(0,choice));else net?.Send(0,new WireMessage{kind="dance",dancing=choice>=0,dance=Mathf.Max(0,choice)});view.ShowDanceChoices(rig.centerEyeAnchor,false);}return;}
    if(action=="bot-fill"){if(model!=null&&InLobby&&net is StareRelayNetwork){model.SetBotFill(!model.BotFillEnabled);PlayerPrefs.SetInt("Staredown.BotFill",model.BotFillEnabled?1:0);PlayerPrefs.Save();}return;}
    if(action=="mic"){voice.ToggleMic();return;}
+   if(action=="voice-reconnect"){voice.ReconnectVoice();return;}
    if(action=="voice"){voice.ToggleVoice();return;}
    if(action=="music"){music.Toggle();view.SetMusicLabel(music.Muted,music.Volume);return;}
    if(action=="music-down"||action=="music-up"){music.SetVolume(music.Volume+(action=="music-up"?.1f:-.1f));view.SetMusicLabel(music.Muted,music.Volume);return;}
@@ -241,7 +242,8 @@ namespace Staredown
     if(m.kind=="failed"&&packet.sender<0) {string error=net.Error;Act("leave");notice="CONNECTION ENDED / "+error;break;}
     if(model!=null)
     {
-     if(m.kind=="connected") {if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){net.ClosePeer(packet.sender);continue;}net.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender});}
+     if(m.kind=="connected") {if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){net.ClosePeer(packet.sender);continue;}net.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender,capturedBlinks=true});}
+     else if(m.kind=="blinkEvent")net.Send(packet.sender,new WireMessage{kind="blinkAck",blinkEvent=m.blinkEvent,error=model.AcceptCapturedBlink(packet.sender,m.blinkEvent)});
      else if(m.kind=="disconnected")model.Remove(packet.sender);
      else if(m.kind=="dance")model.Dance(packet.sender,m.dancing,m.dance);
      else if(m.kind=="skin")model.SelectSkin(packet.sender,m.skin);
@@ -254,7 +256,7 @@ namespace Staredown
       {f.lastAvatarPose=model.Clock;pendingAvatarPoses[packet.sender]=pose;net.Broadcast(new WireMessage{kind="avatarPose",id=packet.sender,pose=m.pose});}
      }
      else if(m.kind=="input"&&Finite(m.left)&&Finite(m.right)&&Finite(m.yaw)&&Finite(m.pitch))
-     {model.Input(packet.sender,m.left,m.right,m.valid,m.ready,m.blink,m.yaw,m.pitch,m.demo);model.Presence(packet.sender,m.presence);if(m.hasRoomPose)model.RoomPose(packet.sender,m.roomPosition,m.roomYaw);}
+     {model.Input(packet.sender,m.left,m.right,m.valid,m.ready,m.blink,m.yaw,m.pitch,m.demo,m.capturedBlinks);model.Presence(packet.sender,m.presence);if(m.hasRoomPose)model.RoomPose(packet.sender,m.roomPosition,m.roomYaw);}
      else if(m.kind=="throw")model.Throw(packet.sender,m.prop,m.origin,m.velocity);
     }
     else
@@ -332,7 +334,7 @@ namespace Staredown
     if(personal!=null&&!string.IsNullOrEmpty(personal.Error))avatarNotice="META AVATAR UNAVAILABLE / USING FROST";
    }
    view.menu.gameObject.SetActive(lobby&&(localId<0||lobbyMenuOpen)&&!choosingAvatar);view.UpdateCharacterSelection(lobby&&choosingAvatar,selectedAvatar,avatarNotice);
-   view.lobbyStatus.text=LobbySummary;view.SetSettingsStatus(eyes.Status+"\n"+voice.Status);view.ipText.text=string.IsNullOrEmpty(address)?"_ _ _ _":address;
+   view.lobbyStatus.text=LobbySummary;view.SetSettingsStatus(eyes.Status+"\n"+voice.Status.Split('\n')[0]+"\n"+voice.ReceiveSummary.Replace('\n',' '));view.ipText.text=string.IsNullOrEmpty(address)?"_ _ _ _":address;
    foreach(var id in pendingAvatarPoses.Keys.ToArray())
    {var avatar=view.MetaViewFor(id);if(avatar!=null){avatar.ApplyPose(pendingAvatarPoses[id]);pendingAvatarPoses.Remove(id);}else if(!State.fighters.Any(f=>f.id==id))pendingAvatarPoses.Remove(id);}
    if(Time.unscaledTime>=nextAvatarPose&&selectedAvatar==StareAvatarCatalog.Meta&&localId>=0)

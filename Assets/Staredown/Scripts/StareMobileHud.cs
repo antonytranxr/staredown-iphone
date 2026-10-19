@@ -12,6 +12,7 @@ namespace Staredown
     {
         static readonly Color Ink=new Color(.025f,.045f,.07f,.96f),Surface=new Color(.065f,.105f,.145f,.98f),Cyan=new Color(.25f,.94f,1),Muted=new Color(.67f,.77f,.82f);
         StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
+        RectTransform voicePanel;Text voiceDetails;Button voiceRepair,voiceDone;
         RectTransform safe,home,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
         Text brand,brandTag,hero,description,namePrompt,homeHint,homeStatus,roomLabel,roomStatus,caption,movementHint,lookHint,cameraTag,cameraStatus,cameraPrivacy;
         Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus,diagnosticsTitle,diagnosticsText;
@@ -153,7 +154,7 @@ namespace Staredown
         void BuildModals()
         {
             scrim=Box("Modal backdrop",safe,Vector2.zero,Vector2.zero,Vector2.one,Vector2.zero,new Color(.006f,.012f,.025f,.76f));scrim.anchorMin=Vector2.zero;scrim.anchorMax=Vector2.one;scrim.offsetMin=scrim.offsetMax=Vector2.zero;scrim.gameObject.SetActive(false);
-            BuildSettings();BuildNameEditor();
+            BuildSettings();BuildNameEditor();BuildVoiceCheck();
         }
         void BuildSettings()
         {
@@ -176,6 +177,18 @@ namespace Staredown
             diagnosticsText=Label("",settingsPanel,Vector2.zero,Vector2.one,14,Muted);
             settingsName=ButtonElement("Edit your name",settingsPanel,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));settingsLeave=ButtonElement("Leave room",settingsPanel,Vector2.zero,Vector2.one,()=>{ShowSettings(false);session.Leave();});
             fill.transform.SetParent(settingsPanel,false);
+        }
+        void BuildVoiceCheck()
+        {
+            voicePanel=Box("Voice check",safe,new Vector2(.5f,.5f),Vector2.zero,new Vector2(500,560),new Vector2(.5f,.5f),Ink);
+            Label("Voice check",voicePanel,new Vector2(20,-20),new Vector2(450,40),28,Color.white,true);
+            voiceDetails=Label("",voicePanel,new Vector2(20,-80),new Vector2(450,350),20,Muted);
+            voiceRepair=ButtonElement("Reconnect voice",voicePanel,new Vector2(20,-438),new Vector2(280,58),()=>session.Voice?.ReconnectVoice());
+            voiceDone=ButtonElement("Done",voicePanel,new Vector2(320,-438),new Vector2(160,58),()=>voicePanel.gameObject.SetActive(false));
+            voicePanel.gameObject.SetActive(false);
+            var voiceCheck=ButtonElement("Voice check",voiceStatus.rectTransform,Vector2.zero,Vector2.one,()=>voicePanel.gameObject.SetActive(true));voiceCheck.GetComponent<Image>().color=Color.clear;var checkRect=voiceCheck.GetComponent<RectTransform>();checkRect.anchorMin=Vector2.zero;checkRect.anchorMax=Vector2.one;checkRect.offsetMin=checkRect.offsetMax=Vector2.zero;
+            // Status text stays readable; the transparent hit target opens details.
+            foreach(var label in voiceStatus.GetComponentsInChildren<Text>())if(label!=voiceStatus)label.text="";
         }
         void BuildNameEditor()
         {
@@ -244,7 +257,7 @@ namespace Staredown
         public void ShowSettings(bool shown)
         {
             if(shown){ShowNameEditor(false);PauseTouches();}
-            settingsPanel.gameObject.SetActive(shown);UpdateModal();
+            settingsPanel.gameObject.SetActive(shown);if(!shown&&voicePanel!=null)voicePanel.gameObject.SetActive(false);UpdateModal();
         }
         void CameraSetup()
         {
@@ -308,7 +321,8 @@ namespace Staredown
             musicPercent.text=Mathf.RoundToInt(session.MusicVolume*100)+"%";syncingMusic=true;musicVolume.SetValueWithoutNotify(session.MusicVolume);syncingMusic=false;
             var voice=session.Voice;mic.interactable=voiceToggle.interactable=voice!=null;
             micLabel.text=voice==null?"Microphone":!voice.MicPermissionGranted?"Enable mic":voice.MicMuted?"Unmute mic":"Mute mic";
-            voiceLabel.text=voice!=null&&voice.VoiceEnabled?"Voice on":"Voice off";voiceStatus.text=voice!=null?voice.Status:"Join an online room for proximity chat.";
+            voiceLabel.text=voice!=null&&voice.VoiceEnabled?"Voice on":"Voice off";voiceStatus.text=voice!=null?voice.ReceiveSummary+"\nTap for voice check":"Join an online room for room chat.";
+            if(voicePanel!=null&&voicePanel.gameObject.activeSelf)voiceDetails.text=voice!=null?voice.DiagnosticsSummary:"Join a room first.";
             portraitChoice.GetComponentInChildren<Text>().text="Portrait";landscapeChoice.GetComponentInChildren<Text>().text="Landscape";Selected(portraitChoice,!session.LandscapeMode);Selected(landscapeChoice,session.LandscapeMode);
             calibrate.interactable=running&&!recovering;
             cameraPower.GetComponentInChildren<Text>().text=enabledIntent?"Camera off":"Enable camera";
@@ -402,6 +416,10 @@ namespace Staredown
             Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,10),new Vector2(width-40,30));Fit(movementHint,14,16);
             Place(lookHint.rectTransform,new Vector2(1,0),new Vector2(1,0),new Vector2(-174,59),new Vector2(tall?190:250,36));
             LayoutSettings(width,height,tall);LayoutName(width,height,tall);
+            float voiceWidth=Mathf.Min(500,width-32),voiceHeight=Mathf.Min(560,height-32);
+            Place(voicePanel,new Vector2(.5f,.5f),new Vector2(.5f,.5f),Vector2.zero,new Vector2(voiceWidth,voiceHeight));
+            voiceDetails.rectTransform.sizeDelta=new Vector2(voiceWidth-40,voiceHeight-190);
+            PlaceButton(voiceRepair,20,voiceHeight-100,voiceWidth-200,58,20);PlaceButton(voiceDone,voiceWidth-180,voiceHeight-100,160,58,20);
         }
         void LayoutSettings(float width,float height,bool tall)
         {
@@ -417,7 +435,7 @@ namespace Staredown
                 float half=(inner-12)*.5f;PlaceButton(mic,20,216,half,58,20);PlaceButton(voiceToggle,32+half,216,half,58,20);Put(voiceStatus,new Vector2(20,-287),new Vector2(inner,52),14);
                 PlaceButton(portraitChoice,20,354,half,58,22);PlaceButton(landscapeChoice,32+half,354,half,58,22);
                 PlaceButton(calibrate,20,438,half,58,20);PlaceButton(cameraPower,32+half,438,half,58,20);Put(calibrationStatus,new Vector2(20,-508),new Vector2(inner,36),16);
-                Put(diagnosticsTitle,new Vector2(20,-556),new Vector2(inner,22),16);Put(diagnosticsText,new Vector2(20,-582),new Vector2(inner,70),14);
+                Put(diagnosticsTitle,new Vector2(20,-556),new Vector2(inner,22),16);Put(diagnosticsText,new Vector2(20,-582),new Vector2(inner,80),12);
                 PlaceButton(settingsName,20,666,showBots?half:inner,50,20);PlaceButton(fill,32+half,666,half,50,18);PlaceButton(settingsLeave,20,730,inner,54,21);
             }
             else
@@ -429,7 +447,7 @@ namespace Staredown
                 PlaceButton(settingsName,20,354,showBots?half:column,50,17);PlaceButton(fill,30+half,354,half,50,17);PlaceButton(settingsLeave,20,418,column,48,20);
                 PlaceButton(portraitChoice,right,82,half,56,19);PlaceButton(landscapeChoice,right+half+10,82,half,56,19);
                 PlaceButton(calibrate,right,154,column,54,21);PlaceButton(cameraPower,right,218,column,54,21);Put(calibrationStatus,new Vector2(right,-286),new Vector2(column,36),16);
-                Put(diagnosticsTitle,new Vector2(right,-338),new Vector2(column,22),15);Put(diagnosticsText,new Vector2(right,-366),new Vector2(column,96),14);
+                Put(diagnosticsTitle,new Vector2(right,-338),new Vector2(column,22),15);Put(diagnosticsText,new Vector2(right,-366),new Vector2(column,96),13);
             }
         }
         void LayoutName(float width,float height,bool tall)

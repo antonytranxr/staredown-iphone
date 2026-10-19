@@ -183,6 +183,7 @@ namespace Staredown
      attached.Add(avatar.cameraHead);Feed feed;feeds.TryGetValue(fighter.id,out feed);
      // Keep an enabled camera head stable through jitter. An old image is
      // explicitly marked paused; it is never reported as a fresh live feed.
+     avatar.cameraHead.SetFirstPerson(fighter.id==localId&&visuals.PhoneView);
      avatar.cameraHead.PresentVideo(feed!=null?feed.texture:null,HasLiveFeed(fighter.id));
     }
     else if(avatar.cameraHead!=null)avatar.cameraHead.Present(null);
@@ -234,6 +235,10 @@ namespace Staredown
   static readonly Color FrameColor=new Color(.015f,.025f,.04f),PausedColor=new Color(1,.62f,.12f);
   // Live retains its original meaning for portrait framing: the camera head
   // is displayed. Fresh/Stale describe whether its actual video is current.
+  public const int FirstPersonLayer=28;
+  public bool FirstPersonHidden {get;private set;}
+  public void SetFirstPerson(bool local)
+  {FirstPersonHidden=local;if(panel!=null)StareFloorReflection.Mark(panel,local?FirstPersonLayer:avatar.root.gameObject.layer);}
   public bool Live=>visible;
   public bool Fresh=>visible&&fresh;
   public bool Stale=>visible&&!fresh;

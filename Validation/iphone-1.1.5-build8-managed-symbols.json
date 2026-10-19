@@ -1,0 +1,7 @@
+{
+  "Tournament_AcceptCapturedBlink": true,
+  "StareBlinkOutbox_Record": true,
+  "StareMobileCamera_add_BlinkCaptured": true,
+  "StareVoice_ReconnectVoice": true,
+  "StareCameraHead_SetFirstPerson": true
+}

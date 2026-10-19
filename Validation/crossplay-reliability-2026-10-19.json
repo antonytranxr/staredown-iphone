@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-19",
+  "quest_version": "1.18.3",
+  "quest_code": 37,
+  "phone_version": "1.1.5",
+  "phone_build": 8,
+  "room_directory": "staredown-crossplatform-v8",
+  "automated_checks": {
+    "captured_blink_authority": 36,
+    "camera_event_provenance": 3,
+    "capture_render_cadence": 58,
+    "native_batch_provider": 9,
+    "headset_rules_regression": 35,
+    "camera_protocol": 33,
+    "mock_voice_lifecycle_ios": 38,
+    "mock_voice_lifecycle_android": 38,
+    "rendered_phone_mirror": 7,
+    "tcp_phone_client_host_protocol": 4,
+    "phone_ui_portrait_landscape": 95,
+    "voice_diagnostics_touch": 5
+  },
+  "rendered_mirror_control_different_pixels": 27224,
+  "live_service_check": "PASS live Lobby/Relay v8 + Vivox group join, output gain repair, channel rejoin and microphone-mute preservation; participants=1; editorMasterMute=True; not a physical audibility test",
+  "limits": [
+    "No physical iPhone blink-recall measurement or sustained thermal/performance test",
+    "Four human participants have not retested all twelve directed audibility paths",
+    "Unity iPhone export is not a signed IPA or TestFlight upload"
+  ]
+}

@@ -29,7 +29,7 @@ namespace Staredown
   float started;static Task services;
   string directoryId;float heartbeatAt,directoryUpdateAt;Task heartbeat,directoryUpdate;
   bool roomOpen=true,publishedOpen=true;
-  const string DirectoryVersion="staredown-crossplatform-v7";
+  const string DirectoryVersion="staredown-crossplatform-v8";
   static readonly SemaphoreSlim queryGate=new SemaphoreSlim(1,1);
   static DateTime nextQueryAt=DateTime.MinValue;
   public const int CodeLength=4;
@@ -126,7 +126,7 @@ namespace Staredown
    code=NormalizeCode(code);if(!ValidCode(code))throw new ArgumentException("ENTER THE 4-DIGIT ROOM CODE");
    await EnsureServices();if(disposed)return;
    var result=await FindRoom(code);if(disposed)return;
-   if(result.Results.Count!=1)throw new InvalidOperationException(result.Results.Count==0?"ROOM NOT FOUND / CHECK THE CODE":"ROOM CODE UNAVAILABLE / ASK HOST TO CREATE A NEW ROOM");
+   if(result.Results.Count!=1)throw new InvalidOperationException(result.Results.Count==0?"ROOM NOT FOUND / CHECK CODE AND UPDATE BOTH APPS":"ROOM CODE UNAVAILABLE / ASK HOST TO CREATE A NEW ROOM");
    var room=result.Results[0];
    if(!room.Data.TryGetValue("open",out var open)||open.Value!="yes")throw new InvalidOperationException("MATCH IN PROGRESS / JOIN AFTER THE MATCH");
    if(!room.Data.TryGetValue("relay",out var relayCode))throw new InvalidOperationException("ROOM UNAVAILABLE / ASK HOST TO CREATE A NEW ROOM");

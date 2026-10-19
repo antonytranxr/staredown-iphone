@@ -34,6 +34,7 @@ namespace Staredown
             trackingReason == 5 ? "CAMERA INTERRUPTED / TRY AGAIN" : trackingReason == 6 ? "CAMERA DELAYED / HOLD STILL" :
             "CAMERA LIVE / KEEP YOUR FACE IN VIEW";
         public event Action<byte[]> FrameReady;
+        public event Action<int,double> BlinkCaptured;
 
         [Serializable] sealed class Sample
         {
@@ -256,7 +257,9 @@ namespace Staredown
             bool facing = Mathf.Abs(sample.yaw) <= 18 && Mathf.Abs(sample.pitch) <= 25;
             bool valid = !historyLost && sample.valid && (replay ? ageValid : fresh) && facing;
             trackingReason = !fresh ? 6 : !facing ? 4 : sample.reason;
-            blink.Sample(sample.left, sample.right, valid, sample.timestamp, Time.realtimeSinceStartupAsDouble - (ageValid ? sample.age : 0));
+            double capturedAt=Time.realtimeSinceStartupAsDouble - (ageValid ? sample.age : 0);
+            if(blink.Sample(sample.left, sample.right, valid, sample.timestamp, capturedAt))
+                BlinkCaptured?.Invoke(blink.BlinkSequence,capturedAt);
             lastCaptureTimestamp = sample.timestamp; consumedSamples++; consumedWindow++;
             Yaw = valid ? sample.yaw : 0; Pitch = valid ? sample.pitch : 0;
         }

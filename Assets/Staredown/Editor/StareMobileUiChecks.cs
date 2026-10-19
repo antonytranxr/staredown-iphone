@@ -168,7 +168,7 @@ public static class StareMobileUiChecks
                 check(supported>=2,"graphics device supports the required 2x UI capture");
                 if(!target.Create())throw new Exception("Phone UI capture RT creation failed");
                 camera.targetTexture=target;camera.rect=new Rect(0,0,1,1);camera.aspect=size.x/(float)size.y;
-                canvas.renderMode=RenderMode.ScreenSpaceCamera;canvas.worldCamera=camera;canvas.planeDistance=1;
+                canvas.renderMode=RenderMode.ScreenSpaceCamera;canvas.worldCamera=camera;canvas.planeDistance=.1f;
                 // The override must follow the camera/RT assignment. It owns
                 // the 600-point short edge; never force canvas scale back to 1.
                 hud.SetReviewViewport(new Vector2(size.x,size.y),safe);Tick(hud);Canvas.ForceUpdateCanvases();camera.Render();

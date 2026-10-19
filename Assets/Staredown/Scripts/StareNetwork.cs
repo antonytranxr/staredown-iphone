@@ -19,6 +19,7 @@ namespace Staredown
         public Vector3 roomPosition; public float roomYaw; public bool hasRoomPose;
         public StarePresenceFrame presence;
         public bool camera; public string cameraFrame; public int cameraSequence;
+        public bool capturedBlinks; public StareCapturedBlink blinkEvent;
     }
     // Small LAN transport: length-prefixed UTF-8, bounded packets/queues, host-owned tournament.
     // Phone face previews use separate bounded camera-frame messages.

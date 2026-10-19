@@ -30,7 +30,7 @@ namespace Staredown
     r.sharedMaterials=mats;
    }
   }
-  public void SetViewer(Transform head){viewer=head;if(head==null)transform.localScale=originalScale;}
+  public void SetViewer(Transform head){viewer=head;if(head==null)transform.localScale=originalScale;else Align();}
   void LateUpdate(){Align();}
   public void Align()
   {

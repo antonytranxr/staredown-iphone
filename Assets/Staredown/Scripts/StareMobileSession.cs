@@ -27,7 +27,7 @@ namespace Staredown
   public bool Hosting=>model!=null;
   public float GameFrameRate {get;private set;}
   public string PerformanceSummary=>"Game "+(GameFrameRate>0?GameFrameRate.ToString("0")+" FPS":"measuring…")+"\n"+
-   (MobileCamera!=null?MobileCamera.DiagnosticsSummary:"Camera off")+"\n"+(CameraHeads!=null?CameraHeads.DiagnosticsSummary:"");
+   (MobileCamera!=null?MobileCamera.DiagnosticsSummary:"Camera off")+"\n"+(CameraHeads!=null?CameraHeads.DiagnosticsSummary:"")+"\n"+blinkOutbox.Status;
   public string StartReadinessStatus
   {
    get
@@ -42,7 +42,8 @@ namespace Staredown
   public Vector2 MoveInput,LookInput;
   public StareVisuals Visuals {get;private set;}
   public StareCameraStream CameraHeads {get;private set;}
-  Tournament model;IStareTransport transport;int generation,placed=-1,lastPhase=-1;
+  Tournament model;IStareTransport transport;bool hostCapturedBlinks;
+  readonly StareBlinkOutbox blinkOutbox=new StareBlinkOutbox();int generation,placed=-1,lastPhase=-1;
   bool lastAlive=true,practice,practiceStarted,profileSent;float sendAt,yaw,pitch;Vector3 floor=new Vector3(0,0,-10);
   AudioSource music,effects;AudioClip eliminationSound,victorySound;int effectPhase=-1,aliveCount=-1;
   float nextPerformanceCheck;int appliedThermal=-1;
@@ -71,11 +72,11 @@ namespace Staredown
    if(ViewCamera==null){var go=new GameObject("Mobile arena camera");ViewCamera=go.AddComponent<Camera>();}
    if(ViewCamera.GetComponent<AudioListener>()==null)ViewCamera.gameObject.AddComponent<AudioListener>();
    ViewCamera.tag="MainCamera";ViewCamera.stereoTargetEye=StereoTargetEyeMask.None;ViewCamera.fieldOfView=65;ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=160;
-   ViewCamera.allowHDR=false;ViewCamera.allowMSAA=true;
+   ViewCamera.allowHDR=false;ViewCamera.allowMSAA=true;ViewCamera.cullingMask&=~(1<<StareCameraHead.FirstPersonLayer);
    ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.identity);
-   MobileCamera=gameObject.AddComponent<StareMobileCamera>();MobileCamera.FrameReady+=ForwardCamera;
+   MobileCamera=gameObject.AddComponent<StareMobileCamera>();MobileCamera.FrameReady+=ForwardCamera;MobileCamera.BlinkCaptured+=CapturedBlink;
    CameraHeads=gameObject.AddComponent<StareCameraStream>();
-   Visuals=gameObject.AddComponent<StareVisuals>();Visuals.Build();Visuals.SetArenaTheme(0);HideVrMenus();
+   Visuals=gameObject.AddComponent<StareVisuals>();Visuals.Build();Visuals.SetLocalViewer(ViewCamera.transform);Visuals.SetArenaTheme(0);HideVrMenus();
    Voice=gameObject.AddComponent<StareVoice>();Voice.Initialize(this);
    var hud=gameObject.AddComponent<StareMobileHud>();hud.Initialize(this);
    music=gameObject.AddComponent<AudioSource>();music.clip=Resources.Load<AudioClip>("Audio/ArenaPulse");music.loop=true;music.volume=MusicVolume;music.mute=!MusicEnabled;music.spatialBlend=0;music.Play();
@@ -134,7 +135,7 @@ namespace Staredown
   public void Leave()
   {
    MobileCamera?.SetContestActive(false);
-   generation++;transport?.Dispose();transport=null;model=null;LocalId=-1;Busy=false;RoomCode="";State=new ArenaState();CameraHeads?.Reset();profileSent=false;placed=-1;lastPhase=-1;practice=practiceStarted=false;MoveInput=LookInput=Vector2.zero;floor=new Vector3(0,0,-10);yaw=pitch=0;
+   blinkOutbox.Clear();hostCapturedBlinks=false;generation++;transport?.Dispose();transport=null;model=null;LocalId=-1;Busy=false;RoomCode="";State=new ArenaState();CameraHeads?.Reset();profileSent=false;placed=-1;lastPhase=-1;practice=practiceStarted=false;MoveInput=LookInput=Vector2.zero;floor=new Vector3(0,0,-10);yaw=pitch=0;
    Status="Choose practice, create a room, or join friends.";
   }
   public void Act(string action)
@@ -147,6 +148,7 @@ namespace Staredown
    if(action=="bot-fill"){if(model!=null&&State.phase==(int)MatchPhase.Lobby)model.SetBotFill(!model.BotFillEnabled);return;}
    if(action=="music"){SetMusicEnabled(!MusicEnabled);return;}
    if(action=="mic"){Voice?.ToggleMic();return;}
+   if(action=="voice-reconnect"){Voice?.ReconnectVoice();return;}
    if(action=="voice"){Voice?.ToggleVoice();return;}
    if(action=="leave"){Leave();return;}
    if(action.StartsWith("dance:")){int dance;if(CanDance&&int.TryParse(action.Substring(6),out dance)&&dance>=-1&&dance<=3){if(model!=null)model.Dance(LocalId,dance>=0,Mathf.Max(0,dance));else transport?.Send(0,new WireMessage{kind="dance",dancing=dance>=0,dance=Mathf.Max(0,dance)});}return;}
@@ -172,10 +174,11 @@ namespace Staredown
     if(CameraHeads.Handle(message,packet.sender,model,transport,LocalId))continue;
     if(model!=null)
     {
-     if(message.kind=="connected"){if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){transport.ClosePeer(packet.sender);continue;}transport.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender});}
+     if(message.kind=="connected"){if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){transport.ClosePeer(packet.sender);continue;}transport.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender,capturedBlinks=true});}
+     else if(message.kind=="blinkEvent")transport.Send(packet.sender,new WireMessage{kind="blinkAck",blinkEvent=message.blinkEvent,error=model.AcceptCapturedBlink(packet.sender,message.blinkEvent)});
      else if(message.kind=="disconnected")model.Remove(packet.sender);
      else if(message.kind=="name")model.SetName(packet.sender,message.name);
-     else if(message.kind=="input"&&Finite(message.left)&&Finite(message.right)&&Finite(message.yaw)&&Finite(message.pitch)){model.Input(packet.sender,message.left,message.right,message.valid,message.ready,message.blink,message.yaw,message.pitch,message.demo);model.Presence(packet.sender,message.presence);if(message.hasRoomPose)model.RoomPose(packet.sender,message.roomPosition,message.roomYaw);}
+     else if(message.kind=="input"&&Finite(message.left)&&Finite(message.right)&&Finite(message.yaw)&&Finite(message.pitch)){model.Input(packet.sender,message.left,message.right,message.valid,message.ready,message.blink,message.yaw,message.pitch,message.demo,message.capturedBlinks);model.Presence(packet.sender,message.presence);if(message.hasRoomPose)model.RoomPose(packet.sender,message.roomPosition,message.roomYaw);}
      else if(message.kind=="avatar")model.SelectAvatar(packet.sender,message.avatar,message.avatarUserId);
      else if(message.kind=="skin")model.SelectSkin(packet.sender,message.skin);
      else if(message.kind=="dance")model.Dance(packet.sender,message.dancing,message.dance);
@@ -184,7 +187,8 @@ namespace Staredown
     }
     else
     {
-     if(message.kind=="welcome"){LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(MobileCamera.Running);Status="Room "+RoomCode+". Explore and wait for the host.";}
+     if(message.kind=="welcome"){hostCapturedBlinks=message.capturedBlinks;LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(MobileCamera.Running);Status="Room "+RoomCode+". Explore and wait for the host.";}
+     if(message.kind=="blinkAck"&&packet.sender==0)blinkOutbox.Acknowledge(message.blinkEvent,message.error);
      if(message.kind=="state"&&message.state!=null)State=message.state;
      if(message.kind=="disconnected"){string error=transport.Error;Leave();Status="Connection ended: "+error;break;}
     }
@@ -200,7 +204,7 @@ namespace Staredown
    performanceFrames++;
    if(now-performanceWindow>=1){GameFrameRate=performanceFrames/(float)(now-performanceWindow);performanceFrames=0;performanceWindow=now;}
    if(Time.unscaledTime>=nextPerformanceCheck){nextPerformanceCheck=Time.unscaledTime+3;ApplyPhonePerformance();}
-   Pump();SyncContestTracking();PlaceForPhase();float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
+   Pump();FlushCapturedBlink();SyncContestTracking();PlaceForPhase();float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
    yaw+=LookInput.x;pitch=Mathf.Clamp(pitch-LookInput.y,-65,65);LookInput=Vector2.zero;
    if(CanMove){var movement=Quaternion.Euler(0,yaw,0)*new Vector3(MoveInput.x,0,MoveInput.y)*3*dt;floor=StareArenaFields.Clamp(State,floor+movement);}
    ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.Euler(pitch,yaw,0));
@@ -208,13 +212,27 @@ namespace Staredown
    var presence=new StarePresenceFrame{headTracked=MobileCamera.Valid,head=Quaternion.Euler(MobileCamera.Pitch,MobileCamera.Yaw,0)};
    if(model!=null)
    {
-    model.Input(LocalId,MobileCamera.Left,MobileCamera.Right,MobileCamera.Valid,MobileCamera.Ready,MobileCamera.BlinkSequence,MobileCamera.Yaw,MobileCamera.Pitch,false);
+    model.Input(LocalId,MobileCamera.Left,MobileCamera.Right,MobileCamera.Valid,MobileCamera.Ready,MobileCamera.BlinkSequence,MobileCamera.Yaw,MobileCamera.Pitch,false,true);
     model.Presence(LocalId,presence);if(CanMove&&placed==LocalId)model.RoomPose(LocalId,floor,yaw);
     if(practice&&!practiceStarted&&model.Phase==MatchPhase.Lobby&&MobileCamera.Ready&&MobileCamera.Valid&&model.Start())practiceStarted=true;model.Tick(dt);State=model.Snapshot();
    }
    if(transport is StareRelayNetwork relay)relay.SetRoomOpen(State.phase==0&&State.fighters.Count(f=>!f.bot)<Tournament.Capacity);
-   if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove&&placed==LocalId,roomPosition=floor,roomYaw=yaw});}
+   if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",capturedBlinks=hostCapturedBlinks,left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove&&placed==LocalId,roomPosition=floor,roomYaw=yaw});}
    SyncContestTracking();PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);Feedback();
+  }
+  void CapturedBlink(int sequence,double capturedAt)
+  {
+   if(model==null&&!hostCapturedBlinks)return; // Older hosts keep the sequence protocol.
+   var local=State.fighters.FirstOrDefault(f=>f.id==LocalId);
+   if(local==null||!local.alive||local.pair<0||State.phase!=(int)MatchPhase.Duel||State.trackingPaused)return;
+   blinkOutbox.Record(State,sequence,capturedAt);
+  }
+  void FlushCapturedBlink()
+  {
+   var evidence=blinkOutbox.Next(State,Time.realtimeSinceStartupAsDouble);
+   if(evidence==null)return;
+   if(model!=null)blinkOutbox.Acknowledge(evidence,model.AcceptCapturedBlink(LocalId,evidence));
+   else if(hostCapturedBlinks)transport?.Send(0,new WireMessage{kind="blinkEvent",blinkEvent=evidence});
   }
   void SyncContestTracking()
   {
@@ -264,7 +282,7 @@ namespace Staredown
    performanceWindow=0;performanceFrames=0;GameFrameRate=0;
    if(paused){SendProfile(false);MoveInput=LookInput=Vector2.zero;}
   }
-  void OnDestroy(){generation++;transport?.Dispose();if(MobileCamera!=null)MobileCamera.FrameReady-=ForwardCamera;CameraHeads?.Reset();Screen.sleepTimeout=SleepTimeout.SystemSetting;}
+  void OnDestroy(){generation++;transport?.Dispose();if(MobileCamera!=null){MobileCamera.FrameReady-=ForwardCamera;MobileCamera.BlinkCaptured-=CapturedBlink;}CameraHeads?.Reset();Screen.sleepTimeout=SleepTimeout.SystemSetting;}
 #if UNITY_EDITOR
   public void TestConnect(IStareTransport testTransport,bool host){Leave();transport=testTransport;if(host){model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();LocalId=0;State=model.Snapshot();}else Busy=true;}
 #endif

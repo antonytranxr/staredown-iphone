@@ -25,9 +25,9 @@ The app opens in portrait. Once you enable the camera, permission interruptions 
 
 - Automatic blink detection uses `ARFaceTrackingConfiguration`; the device must support ARKit face tracking. Test on a physical compatible iPhone, facing the front camera, in adequate lighting. The iOS Simulator does not validate this camera path.
 - Multiplayer uses Unity Authentication, Lobby, and Relay. The checked-in public Unity project identifiers refer to the original game's services. To operate an independent deployment, link the project to your Unity Cloud project and enable/configure those services. Never put service secrets in source control.
-- Current source uses **four-digit room codes** and the `staredown-crossplatform-v7` directory. Quest and phone clients must use matching protocol versions. Older prebuilt phone apps are not equivalent to this source snapshot.
+- Current source uses **four-digit room codes** and the `staredown-crossplatform-v8` directory. Quest and phone clients must use matching protocol versions. Older prebuilt phone apps are not equivalent to this source snapshot.
 - Live camera sharing sends a compressed front-camera image to players in the room when enabled. Review the camera UI, privacy disclosure, and service settings before distributing.
-- Voice chat uses the shared Vivox integration; availability depends on the deployment's Unity service configuration.
+- This build tests room-wide Vivox voice with playback recovery. All participants need Quest 1.18.3 or iPhone 1.1.5 (8); older rooms are isolated. Tap the voice status in Settings for receive activity, output state and Reconnect voice. SDK speech indicators do not prove physical audibility.
 
 ## Source map
 
@@ -46,6 +46,6 @@ The app opens in portrait. Once you enable the camera, permission interruptions 
 
 ## Validation status
 
-The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Physical iPhone camera accuracy, installation, and sustained performance still need device validation. The latest Unity iPhone export is version 1.1.4 build 7 from Unity 6000.3.26f1 LTS and passed its native scene lifecycle checks; no new native IPA or TestFlight upload has been produced. See `VALIDATION.md`.
+The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Physical iPhone camera accuracy, installation, and sustained performance still need device validation. The latest Unity iPhone export is version 1.1.5 build 8 from Unity 6000.3.26f1 LTS and passed its native scene lifecycle checks; no new native IPA or TestFlight upload has been produced. See `VALIDATION.md`.
 
 `SOURCE_SNAPSHOT.json` identifies the local source checkpoint used for this upload. No open-source license is granted to the game or bundled third-party content by uploading it here.

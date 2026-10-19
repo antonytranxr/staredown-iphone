@@ -234,10 +234,11 @@ namespace Staredown
    settingsVoiceLabel=UIButton("Voice: On","voice",settingsPanel,new Vector3(.83f,-.46f,-.065f),new Vector2(1.55f,.32f)).GetComponentInChildren<TextMesh>();
    MusicControls(settingsPanel,new Vector3(-.83f,-.89f,-.065f),1.55f);
    fpsSettingLabel=UIButton("FPS counter: Off","fps-toggle",settingsPanel,new Vector3(.83f,-.89f,-.065f),new Vector2(1.55f,.32f)).GetComponentInChildren<TextMesh>();
-   settingsStatus=UILabel("",settingsPanel,new Vector3(0,-1.14f,-.04f),.019f,UIMuted,false,TextAnchor.MiddleCenter);
-   UIButton("Skins & level","skins",settingsPanel,new Vector3(-1.10f,-1.38f,-.065f),new Vector2(1.02f,.29f));
-   UIButton("How to play","how-to-play",settingsPanel,new Vector3(0,-1.38f,-.065f),new Vector2(1.02f,.29f));
-   UIButton("Done","settings-back",settingsPanel,new Vector3(1.10f,-1.38f,-.065f),new Vector2(1.02f,.29f),true);
+   settingsStatus=UILabel("",settingsPanel,new Vector3(0,-1.13f,-.04f),.014f,UIMuted,false,TextAnchor.MiddleCenter);
+   UIButton("Skins","skins",settingsPanel,new Vector3(-1.24f,-1.38f,-.065f),new Vector2(.76f,.29f));
+   UIButton("How to play","how-to-play",settingsPanel,new Vector3(-.41f,-1.38f,-.065f),new Vector2(.76f,.29f));
+   UIButton("Repair voice","voice-reconnect",settingsPanel,new Vector3(.41f,-1.38f,-.065f),new Vector2(.76f,.29f));
+   UIButton("Done","settings-back",settingsPanel,new Vector3(1.24f,-1.38f,-.065f),new Vector2(.76f,.29f),true);
    settingsPanel.gameObject.SetActive(false);
   }
   public void UpdateArenaSelection(int theme,bool canChoose,bool guest)

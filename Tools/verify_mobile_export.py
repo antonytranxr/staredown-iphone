@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only validation of the Staredown 1.1.4 (7) Unity iPhone export.
+"""Read-only validation of the Staredown 1.1.5 (8) Unity iPhone export.
 
 Usage: python3 verify_export.py EXPORT [--source-project UNITY_PROJECT]
 Uses Python's standard library and macOS plutil to read Xcode's OpenStep plist.
@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 
-VERSION, BUILD = "1.1.4", "7"
+VERSION, BUILD = "1.1.5", "8"
 ORIENTATIONS = {
     "UIInterfaceOrientationPortrait",
     "UIInterfaceOrientationLandscapeLeft",
@@ -155,7 +155,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export", type=Path)
     parser.add_argument("--source-project", type=Path,
-                        default=Path(__file__).resolve().parents[1])
+                        default=Path(__file__).resolve().parents[4] / "MetaVRStarter")
     arguments = parser.parse_args()
     try:
         report = verify(arguments.export.expanduser().resolve(), arguments.source_project.expanduser().resolve())

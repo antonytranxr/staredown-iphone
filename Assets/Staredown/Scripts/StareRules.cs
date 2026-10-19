@@ -19,6 +19,7 @@ namespace Staredown
         [NonSerialized] public float lastInput, lastThrow = -10;
         [NonSerialized] public float lastAvatarPose = -10;
         [NonSerialized] public int blinkSequence;
+        [NonSerialized] public int capturedBlinkSequence;
         [NonSerialized] public bool openingEyesPending;
         [NonSerialized] public float openingClosedFor;
         [NonSerialized] public bool phoneTrackingRequired;
@@ -67,7 +68,7 @@ namespace Staredown
     }
     [Serializable] public class ArenaState
     {
-        public int phase, round, arenaTheme, winner = -1; public float clock, remaining;
+        public int phase, round, duel, arenaTheme, winner = -1; public float clock, remaining;
         public bool trackingPaused, finalRound,botFill;public string matchToken; public string announcement = "YOUR EYES. YOUR NERVE.";
         public Fighter[] fighters = Array.Empty<Fighter>(); public Pairing[] pairs = Array.Empty<Pairing>();
         public Toss[] tosses = Array.Empty<Toss>();
@@ -116,7 +117,7 @@ namespace Staredown
         public readonly List<Fighter> Fighters = new List<Fighter>();
         public readonly List<Pairing> Pairs = new List<Pairing>();
         public readonly List<Toss> Tosses = new List<Toss>();
-        public MatchPhase Phase; public int Round, Winner = -1; public float Clock, Remaining;
+        public MatchPhase Phase; public int Duel {get;private set;} public int Round, Winner = -1; public float Clock, Remaining;
         public int ArenaTheme { get; private set; }
         public string MatchToken {get;private set;}
         public bool BotFillEnabled { get; private set; }
@@ -245,13 +246,27 @@ namespace Staredown
             }
             Phase = MatchPhase.Countdown; Remaining = 5; Announcement = survivors.Count == 2 ? "THE FINAL STARE" : "ROUND " + Round + " / EYES UP";
         }
-        public void Input(int id, float l, float r, bool valid, bool ready, int blink, float yaw, float pitch, bool demo = false)
+        public void Input(int id, float l, float r, bool valid, bool ready, int blink, float yaw, float pitch, bool demo = false, bool capturedBlinks = false)
         {
             var f = Find(id); if (f == null || f.bot) return;
             f.left = Mathf.Clamp01(l); f.right = Mathf.Clamp01(r); f.valid = valid; f.ready = ready; f.lastInput = Clock;
             f.yaw = Mathf.Clamp(yaw, -85, 85); f.pitch = Mathf.Clamp(pitch, -60, 60);
             if (Phase == MatchPhase.Lobby) { f.demo=demo; f.status = !valid ? "TRACKING LOST" : ready ? "READY" : "CALIBRATE"; }
-            if (blink > f.blinkSequence) { f.blinkSequence = blink; if (valid && ready) Blink(id); }
+            if (blink > f.blinkSequence) { f.blinkSequence = blink; if (!capturedBlinks && valid && ready) Blink(id); }
+        }
+        // Capture-time evidence travels independently of the latest eye pose.
+        // The sender ID comes from the transport, never the event payload.
+        public string AcceptCapturedBlink(int sender, StareCapturedBlink evidence)
+        {
+            var f=Find(sender);
+            if(f==null||f.bot||f.disconnected||!f.phoneCamera&&!f.phoneTrackingRequired)return "not a phone contestant";
+            if(evidence==null||evidence.matchToken!=MatchToken||evidence.round!=Round||evidence.duel!=Duel)return "different duel";
+            if(evidence.sequence<=0)return "invalid sequence";
+            if(evidence.sequence<=f.capturedBlinkSequence)return "confirmed";
+            if(Phase!=MatchPhase.Duel||!f.alive||f.pair<0||f.pair>=Pairs.Count||Pairs[f.pair].winner>=0)return "duel ended";
+            if(!evidence.valid||!evidence.ready||float.IsNaN(evidence.age)||float.IsInfinity(evidence.age)||evidence.age<0||evidence.age>StareBlinkOutbox.MaximumAge)return "invalid capture";
+            f.capturedBlinkSequence=evidence.sequence;
+            QueueBlink(f);return "confirmed";
         }
         public void Blink(int id)
         {
@@ -315,7 +330,7 @@ namespace Staredown
             if (Phase == MatchPhase.Countdown)
             {
                 Remaining -= dt;
-                if (Remaining <= 0) { Phase = MatchPhase.Duel; Remaining = 45; Announcement = Fighters.Count(f => f.alive) == 2 ? "FINAL / DON'T BLINK" : "DON'T BLINK"; foreach (var f in Fighters.Where(f => f.alive && f.pair >= 0)){f.status = "STARING";f.openingEyesPending=!f.bot&&(f.left>=.3f||f.right>=.3f);f.openingClosedFor=0;} }
+                if (Remaining <= 0) { Phase = MatchPhase.Duel; Duel++; Remaining = 45; Announcement = Fighters.Count(f => f.alive) == 2 ? "FINAL / DON'T BLINK" : "DON'T BLINK"; foreach (var f in Fighters.Where(f => f.alive && f.pair >= 0)){f.status = "STARING";f.openingEyesPending=!f.bot&&(f.left>=.3f||f.right>=.3f);f.openingClosedFor=0;} }
             }
             else if (Phase == MatchPhase.Duel)
             {
@@ -407,7 +422,7 @@ namespace Staredown
             Tosses.Add(new Toss { id = ++tossId, owner = id, kind = Mathf.Clamp(kind, 0, 2), born = Clock, origin = origin, velocity = Vector3.ClampMagnitude(velocity, 14) }); return true;
         }
         static bool Finite(Vector3 v) => !(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z) || float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z));
-        public ArenaState Snapshot() => new ArenaState { phase = (int)Phase, arenaTheme = ArenaTheme, botFill=BotFillEnabled, matchToken=MatchToken, round = Round, winner = Winner, clock = Clock, remaining = Remaining, trackingPaused = TrackingPaused, finalRound = FinalRound, announcement = Announcement, fighters = Fighters.ToArray(), pairs = Pairs.ToArray(), tosses = Tosses.ToArray() };
+        public ArenaState Snapshot() => new ArenaState { phase = (int)Phase, arenaTheme = ArenaTheme, duel=Duel, botFill=BotFillEnabled, matchToken=MatchToken, round = Round, winner = Winner, clock = Clock, remaining = Remaining, trackingPaused = TrackingPaused, finalRound = FinalRound, announcement = Announcement, fighters = Fighters.ToArray(), pairs = Pairs.ToArray(), tosses = Tosses.ToArray() };
     }
     public static class ArenaLayout
     {
