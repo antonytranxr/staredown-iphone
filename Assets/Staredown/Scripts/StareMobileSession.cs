@@ -25,6 +25,9 @@ namespace Staredown
   public bool Connected=>LocalId>=0;
   public bool Busy {get;private set;}
   public bool Hosting=>model!=null;
+  public float GameFrameRate {get;private set;}
+  public string PerformanceSummary=>"Game "+(GameFrameRate>0?GameFrameRate.ToString("0")+" FPS":"measuring…")+"\n"+
+   (MobileCamera!=null?MobileCamera.DiagnosticsSummary:"Camera off")+"\n"+(CameraHeads!=null?CameraHeads.DiagnosticsSummary:"");
   public string StartReadinessStatus
   {
    get
@@ -43,6 +46,7 @@ namespace Staredown
   bool lastAlive=true,practice,practiceStarted,profileSent;float sendAt,yaw,pitch;Vector3 floor=new Vector3(0,0,-10);
   AudioSource music,effects;AudioClip eliminationSound,victorySound;int effectPhase=-1,aliveCount=-1;
   float nextPerformanceCheck;int appliedThermal=-1;
+  double performanceWindow;int performanceFrames;
   void Awake()
   {
    Application.targetFrameRate=RenderFrameRate;Application.runInBackground=true;Screen.sleepTimeout=SleepTimeout.NeverSleep;
@@ -91,7 +95,7 @@ namespace Staredown
   public void Practice()
   {
    if(!RequirePlayerName())return;
-   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);Status="Practice: look at the camera and keep both eyes open to calibrate.";
+   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);State=model.Snapshot();Status="Practice: look at the camera and keep both eyes open to calibrate.";
   }
   public void SetPlayerName(string value)
   {
@@ -120,7 +124,7 @@ namespace Staredown
      string room=await relay.HostAsync();if(request!=generation||this==null)return;
      while(!relay.Bound&&string.IsNullOrEmpty(relay.Error)){relay.Tick();await System.Threading.Tasks.Task.Delay(20);if(request!=generation||this==null)return;}
      if(!string.IsNullOrEmpty(relay.Error))throw new InvalidOperationException(relay.Error);
-     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);Busy=false;Status="Share the room code. Explore while friends join.";
+     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);State=model.Snapshot();Busy=false;Status="Share the room code. Explore while friends join.";
     }
     else {await relay.JoinAsync(code);if(request!=generation||this==null)return;RoomCode=StareRelayNetwork.NormalizeCode(code);Status="Connected to Relay. Waiting for the host…";}
    }
@@ -129,6 +133,7 @@ namespace Staredown
   }
   public void Leave()
   {
+   MobileCamera?.SetContestActive(false);
    generation++;transport?.Dispose();transport=null;model=null;LocalId=-1;Busy=false;RoomCode="";State=new ArenaState();CameraHeads?.Reset();profileSent=false;placed=-1;lastPhase=-1;practice=practiceStarted=false;MoveInput=LookInput=Vector2.zero;floor=new Vector3(0,0,-10);yaw=pitch=0;
    Status="Choose practice, create a room, or join friends.";
   }
@@ -136,7 +141,7 @@ namespace Staredown
   {
    if(action=="camera")
    {
-    if(MobileCamera.Running){SendProfile(false);MobileCamera.StopCamera();}else MobileCamera.StartCamera();return;
+    if(MobileCamera.CameraEnabledIntent){SendProfile(false);MobileCamera.StopCamera();}else MobileCamera.StartCamera();return;
    }
    if(action=="calibrate"){MobileCamera.Calibrate();return;}
    if(action=="bot-fill"){if(model!=null&&State.phase==(int)MatchPhase.Lobby)model.SetBotFill(!model.BotFillEnabled);return;}
@@ -156,7 +161,7 @@ namespace Staredown
    profileSent=enabled;
   }
   void ForwardCamera(byte[] jpeg)
-  {if(Connected&&MobileCamera.Running)CameraHeads.Publish(jpeg,LocalId,model,transport);}
+  {if(Connected&&MobileCamera.Running)CameraHeads.Publish(jpeg,LocalId,model,transport,MobileCamera.Preview as Texture2D);}
   void Pump()
   {
    if(transport==null)return;transport.Tick();StareNetwork.Incoming packet;
@@ -190,8 +195,12 @@ namespace Staredown
   void Update()
   {
    if(MobileCamera==null||Visuals==null)return;
+   double now=Time.realtimeSinceStartupAsDouble;
+   if(performanceWindow<=0)performanceWindow=now;
+   performanceFrames++;
+   if(now-performanceWindow>=1){GameFrameRate=performanceFrames/(float)(now-performanceWindow);performanceFrames=0;performanceWindow=now;}
    if(Time.unscaledTime>=nextPerformanceCheck){nextPerformanceCheck=Time.unscaledTime+3;ApplyPhonePerformance();}
-   Pump();PlaceForPhase();float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
+   Pump();SyncContestTracking();PlaceForPhase();float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
    yaw+=LookInput.x;pitch=Mathf.Clamp(pitch-LookInput.y,-65,65);LookInput=Vector2.zero;
    if(CanMove){var movement=Quaternion.Euler(0,yaw,0)*new Vector3(MoveInput.x,0,MoveInput.y)*3*dt;floor=StareArenaFields.Clamp(State,floor+movement);}
    ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.Euler(pitch,yaw,0));
@@ -200,12 +209,17 @@ namespace Staredown
    if(model!=null)
    {
     model.Input(LocalId,MobileCamera.Left,MobileCamera.Right,MobileCamera.Valid,MobileCamera.Ready,MobileCamera.BlinkSequence,MobileCamera.Yaw,MobileCamera.Pitch,false);
-    model.Presence(LocalId,presence);if(CanMove)model.RoomPose(LocalId,floor,yaw);
+    model.Presence(LocalId,presence);if(CanMove&&placed==LocalId)model.RoomPose(LocalId,floor,yaw);
     if(practice&&!practiceStarted&&model.Phase==MatchPhase.Lobby&&MobileCamera.Ready&&MobileCamera.Valid&&model.Start())practiceStarted=true;model.Tick(dt);State=model.Snapshot();
    }
    if(transport is StareRelayNetwork relay)relay.SetRoomOpen(State.phase==0&&State.fighters.Count(f=>!f.bot)<Tournament.Capacity);
-   if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove,roomPosition=floor,roomYaw=yaw});}
-   PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);Feedback();
+   if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove&&placed==LocalId,roomPosition=floor,roomYaw=yaw});}
+   SyncContestTracking();PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);Feedback();
+  }
+  void SyncContestTracking()
+  {
+   var local=State.fighters.FirstOrDefault(f=>f.id==LocalId);
+   MobileCamera.SetContestActive(local!=null&&local.alive&&local.pair>=0&&State.phase==(int)MatchPhase.Duel);
   }
   void PlaceForPhase()
   {
@@ -243,10 +257,16 @@ namespace Staredown
    Debug.Log("[STARE MOBILE PERFORMANCE] render="+size.x+"x"+size.y+" fps="+Application.targetFrameRate+" msaa="+QualitySettings.antiAliasing+" thermal="+thermal+" / eye capture remains independent");
 #endif
   }
-  void OnApplicationPause(bool paused){if(paused){SendProfile(false);MobileCamera?.StopCamera();MoveInput=LookInput=Vector2.zero;}}
+  void OnApplicationPause(bool paused)
+  {
+   // The camera provider owns pause/resume and remembers explicit user intent.
+   // Permission dialogs must not become another Enable-camera step on joining.
+   performanceWindow=0;performanceFrames=0;GameFrameRate=0;
+   if(paused){SendProfile(false);MoveInput=LookInput=Vector2.zero;}
+  }
   void OnDestroy(){generation++;transport?.Dispose();if(MobileCamera!=null)MobileCamera.FrameReady-=ForwardCamera;CameraHeads?.Reset();Screen.sleepTimeout=SleepTimeout.SystemSetting;}
 #if UNITY_EDITOR
-  public void TestConnect(IStareTransport testTransport,bool host){Leave();transport=testTransport;if(host){model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();LocalId=0;}else Busy=true;}
+  public void TestConnect(IStareTransport testTransport,bool host){Leave();transport=testTransport;if(host){model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();LocalId=0;State=model.Snapshot();}else Busy=true;}
 #endif
  }
 }

@@ -8,14 +8,18 @@ namespace Staredown
     {
         public const double StaleAfter = .25;
         public const double CalibrationSeconds = 1.5;
+        public const double ClosureSeconds = .030, MaximumCaptureGap = .12;
         public bool Valid { get; private set; }
         public bool Ready => Valid && calibrated;
         public int BlinkSequence { get; private set; }
         public float Left { get; private set; }
         public float Right { get; private set; }
+        public int CaptureGaps { get; private set; }
         public float CalibrationProgress => Ready ? 1 : !Valid || double.IsNaN(openStart) ? 0 :
             (float)Math.Max(0, Math.Min(1, (lastCapture-openStart)/CalibrationSeconds));
         bool calibrated, armed;
+        int closedSamples;
+        double blinkFloor = double.NegativeInfinity;
         double lastCapture = double.NaN, lastReceived = double.NegativeInfinity;
         double openStart = double.NaN, closedStart = double.NaN;
 
@@ -25,34 +29,45 @@ namespace Staredown
             Left = Right = 0;
             lastCapture = openStart = closedStart = double.NaN;
             lastReceived = double.NegativeInfinity;
+            closedSamples = 0; blinkFloor = double.NegativeInfinity;
             // Keep sequence monotonic across calibration and camera restarts.
         }
+
+        // Set at the local Go boundary so queued countdown captures cannot
+        // become new losing events when a slow render frame finally drains.
+        public void IgnoreBlinksThrough(double captureTimestamp) { blinkFloor = captureTimestamp; }
 
         public bool Sample(float left, float right, bool valid, double captureTimestamp, double receivedAt)
         {
             if (double.IsNaN(captureTimestamp) || double.IsInfinity(captureTimestamp) ||
                 double.IsNaN(receivedAt) || double.IsInfinity(receivedAt)) return false;
             if (!double.IsNaN(lastCapture) && captureTimestamp <= lastCapture) return false;
-            bool gap = !double.IsNaN(lastCapture) && captureTimestamp - lastCapture > StaleAfter;
+            bool gap = !double.IsNaN(lastCapture) && captureTimestamp - lastCapture > MaximumCaptureGap;
             lastCapture = captureTimestamp; lastReceived = receivedAt;
             if (!valid || float.IsNaN(left) || float.IsNaN(right) || float.IsInfinity(left) || float.IsInfinity(right))
             { LoseTracking(); return false; }
-            if (gap) LoseTracking();
+            if (gap) { CaptureGaps++; LoseTracking(); }
             Valid = true;
             Left = Math.Max(0, Math.Min(1, left)); Right = Math.Max(0, Math.Min(1, right));
             if (Left < .30f && Right < .30f)
             {
                 if (double.IsNaN(openStart)) openStart = captureTimestamp;
                 if (captureTimestamp - openStart >= CalibrationSeconds) calibrated = true;
-                armed = true; closedStart = double.NaN;
+                armed = true; closedStart = double.NaN; closedSamples = 0;
                 return false;
             }
             openStart = double.NaN;
-            if (!calibrated || !armed) { closedStart = double.NaN; return false; }
-            if (Math.Max(Left, Right) < .72f) { closedStart = double.NaN; return false; }
+            if (!calibrated || !armed) { closedStart = double.NaN; closedSamples = 0; return false; }
+            if (Math.Max(Left, Right) < .72f) { closedStart = double.NaN; closedSamples = 0; return false; }
             if (double.IsNaN(closedStart)) closedStart = captureTimestamp;
-            if (captureTimestamp - closedStart < .045) return false;
-            armed = false; closedStart = double.NaN; BlinkSequence++;
+            closedSamples++;
+            // At 30 Hz, two closed captures span 33 ms. Requiring 45 ms forced
+            // three captures and discarded that real short closure. Never
+            // accept a single noisy peak; 60 Hz still needs three captures.
+            if (closedSamples < 2 || captureTimestamp - closedStart < ClosureSeconds) return false;
+            armed = false; closedStart = double.NaN; closedSamples = 0;
+            if (captureTimestamp <= blinkFloor) return false;
+            BlinkSequence++;
             return true;
         }
 
@@ -67,7 +82,7 @@ namespace Staredown
             // calibration window on return. Only fresh captures can complete
             // a blink; the host separately forfeits a sustained missing face.
             Valid = false;
-            Left = Right = 0; openStart = closedStart = double.NaN;
+            Left = Right = 0; openStart = closedStart = double.NaN; closedSamples = 0;
         }
     }
 }

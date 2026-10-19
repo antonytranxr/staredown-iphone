@@ -28,7 +28,11 @@ public static class StareMobileUsabilityChecks
    session.SetPlayerName("Player");check(session.HasPlayerName&&session.PlayerName=="Player","explicitly confirmed Player is a valid chosen name");
    PlayerPrefs.DeleteKey(keys[1]);PlayerPrefs.SetString(keys[0],"Legacy Ava");check(session.HasPlayerName,"an older real name remains available");
    session.SetPlayerName(" Ava Phone ");check(session.HasPlayerName&&session.PlayerName=="Ava Phone","confirmed name is sanitized and saved");
-   session.Practice();check(session.Connected&&session.Hosting,"named player can enter practice");session.Leave();
+   session.Practice();check(session.Connected&&session.Hosting,"named player can enter practice");
+   check(session.State.fighters.Any(f=>f.id==session.LocalId),"room entry exposes the roster before the first movement input");
+   Vector3 entrySeat=ArenaLayout.Seat(session.State,session.LocalId);
+   session.SendMessage("Update");
+   check(Vector3.Distance(session.ViewCamera.transform.position,entrySeat+Vector3.up*1.6f)<.01f,"initial camera uses assigned arena entry position before sending room pose");session.Leave();
    session.SetMusicEnabled(false);check(!session.MusicEnabled&&music.mute,"music off reaches actual AudioSource");
    session.SetMusicVolume(.37f);check(Mathf.Abs(session.MusicVolume-.37f)<.001f&&Mathf.Abs(music.volume-.37f)<.001f,"volume preference reaches actual AudioSource");
    check(music.mute,"changing volume does not silently unmute music");

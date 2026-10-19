@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only validation of the Staredown 1.1.3 (6) Unity iPhone export.
+"""Read-only validation of the Staredown 1.1.4 (7) Unity iPhone export.
 
 Usage: python3 verify_export.py EXPORT [--source-project UNITY_PROJECT]
 Uses Python's standard library and macOS plutil to read Xcode's OpenStep plist.
@@ -16,13 +16,17 @@ import subprocess
 import sys
 
 
-VERSION, BUILD = "1.1.3", "6"
+VERSION, BUILD = "1.1.4", "7"
 ORIENTATIONS = {
     "UIInterfaceOrientationPortrait",
     "UIInterfaceOrientationLandscapeLeft",
     "UIInterfaceOrientationLandscapeRight",
 }
-SYMBOL = "StareMobileIOSRefreshOrientation"
+SYMBOLS = {
+    "orientation": "StareMobileIOSRefreshOrientation",
+    "drain_samples": "StareMobileIOSDrainSamples",
+    "latest_capture_timestamp": "StareMobileIOSLatestCaptureTimestamp",
+}
 
 
 def verify(export, source_project):
@@ -126,17 +130,21 @@ def verify(export, source_project):
 
     generated = export / "Il2CppOutputProject/Source/il2cppOutput"
     check("generated_IL2CPP_directory", generated.is_dir())
-    symbol_files, direct_call = [], False
-    # The phone camera is in Assembly-CSharp. Avoid scanning unrelated SDKs or
-    # accepting a copy in Libraries/Plugins as evidence of generated C# linkage.
+    symbol_files = {label: [] for label in SYMBOLS}
+    direct_calls = {label: False for label in SYMBOLS}
+    # The phone camera is in Assembly-CSharp. A native definition alone does
+    # not prove that IL2CPP retained the managed P/Invoke and actual call site.
     for path in sorted(generated.glob("Assembly-CSharp*.cpp")):
         text = path.read_text(encoding="utf-8", errors="replace")
-        if SYMBOL in text:
-            symbol_files.append(str(path.relative_to(export)))
-            direct_call |= bool(re.search(r"reinterpret_cast\s*<\s*PInvokeFunc\s*>\s*\(\s*" + SYMBOL + r"\s*\)", text))
-    details["orientationSymbolFiles"] = symbol_files
-    check("generated_IL2CPP_orientation_symbol", bool(symbol_files))
-    check("generated_IL2CPP_orientation_PInvoke_call", direct_call)
+        for label, symbol in SYMBOLS.items():
+            if symbol in text:
+                symbol_files[label].append(str(path.relative_to(export)))
+                direct_calls[label] |= bool(re.search(
+                    r"reinterpret_cast\s*<\s*PInvokeFunc\s*>\s*\(\s*" + re.escape(symbol) + r"\s*\)", text))
+    details["nativeSymbolFiles"] = symbol_files
+    for label, symbol in SYMBOLS.items():
+        check("generated_IL2CPP_" + label + "_symbol", bool(symbol_files[label]), symbol)
+        check("generated_IL2CPP_" + label + "_PInvoke_call", direct_calls[label], symbol)
     failed = [{"check": name, **({"detail": detail} if detail else {})}
               for name, passed, detail in checks if not passed]
     return {"ok": not failed, "checks": len(checks), "passed": len(checks) - len(failed),

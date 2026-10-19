@@ -14,12 +14,13 @@ namespace Staredown
         StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
         RectTransform safe,home,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
         Text brand,brandTag,hero,description,namePrompt,homeHint,homeStatus,roomLabel,roomStatus,caption,movementHint,lookHint,cameraTag,cameraStatus,cameraPrivacy;
-        Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus;
+        Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus,diagnosticsTitle,diagnosticsText;
         InputField code,playerName,nameEditorInput;RawImage preview;Slider musicVolume;
-        Button practice,host,join,leave,start,fill,dance,cameraToggle,editPlayerName,settingsButton,settingsDone,nameCancel,nameConfirm,musicToggle,mic,voiceToggle,portraitChoice,landscapeChoice,calibrate,settingsName,settingsLeave;
+        Button practice,host,join,leave,start,fill,dance,cameraToggle,cameraCard,cameraPower,editPlayerName,settingsButton,settingsDone,nameCancel,nameConfirm,musicToggle,mic,voiceToggle,portraitChoice,landscapeChoice,calibrate,settingsName,settingsLeave;
         StareMobileJoystick joystick;StareMobileLookPad lookPad;
         Vector2 lastScreen,layoutSize;Rect lastSafe;bool portrait,lastConnected,lastLobby,lastHosting,layoutReady;
         string pendingEntry="",pendingCode="",entryError="";bool syncingMusic;
+        bool previewExpanded,wasConnected,wasCanMove;float movementHintUntil,captionChangedAt;string previousCaption="";
 #if UNITY_EDITOR
         bool reviewViewport;Vector2 reviewPixels;Rect reviewSafe;
 #endif
@@ -50,6 +51,13 @@ namespace Staredown
         public Button PortraitButton=>portraitChoice;
         public Button LandscapeButton=>landscapeChoice;
         public Button CalibrateButton=>calibrate;
+        public Button CameraPowerButton=>cameraPower;
+        public Button CameraPreviewButton=>cameraCard;
+        public Button CameraSetupButton=>cameraToggle;
+        public bool CollapsedPreview=>session!=null&&session.Connected&&!previewExpanded;
+        public bool PreviewExpanded=>session!=null&&session.Connected&&previewExpanded;
+        public RectTransform RoomToolbarRect=>roomBar;
+        public string TrackingDiagnostics=>diagnosticsText!=null?diagnosticsText.text:"";
         public string PendingEntryAction=>pendingEntry;
         public bool ValidNameDraft=>playerName!=null&&StarePlayerName.IsValid(playerName.text);
         public int MovePointerId=>joystick!=null?joystick.PointerId:int.MinValue;
@@ -91,7 +99,7 @@ namespace Staredown
             playerName=NameField(home);playerName.SetTextWithoutNotify(session.HasPlayerName?session.PlayerName:"");
             playerName.onValueChanged.AddListener(value=>entryError="");
             playerName.onEndEdit.AddListener(value=>playerName.SetTextWithoutNotify(StarePlayerName.Clean(value)));
-            homeHint=Label("Camera on. Face in view.\nFirst blink loses.",home,Vector2.zero,Vector2.one,21,Muted);
+            homeHint=Label("Keep both eyes open to calibrate.\nFirst blink loses.",home,Vector2.zero,Vector2.one,21,Muted);
             practice=ButtonElement("Practice with bots",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("practice"),true);
             host=ButtonElement("Create room",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("host"));
             var field=Box("Four digit room code",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
@@ -104,16 +112,20 @@ namespace Staredown
         void BuildRoom()
         {
             roomBar=Box("Room toolbar",safe,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            roomBar.GetComponent<Image>().raycastTarget=false;
             roomLabel=Label("",roomBar,Vector2.zero,Vector2.one,28,Color.white,true);roomStatus=Label("",roomBar,Vector2.zero,Vector2.one,18,Muted);
             editPlayerName=ButtonElement("Your name",roomBar,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));nameButtonLabel=editPlayerName.GetComponentInChildren<Text>();Fit(nameButtonLabel,15,21);
             fill=ButtonElement("Bots: on",roomBar,Vector2.zero,Vector2.one,()=>session.Act("bot-fill"));fillLabel=fill.GetComponentInChildren<Text>();
-            start=ButtonElement("Start match",roomBar,Vector2.zero,Vector2.one,()=>session.StartMatch(),true);startLabel=start.GetComponentInChildren<Text>();Fit(startLabel,16,23);
+            start=ButtonElement("Start match",safe,Vector2.zero,Vector2.one,()=>session.StartMatch(),true);startLabel=start.GetComponentInChildren<Text>();Fit(startLabel,16,23);
             leave=ButtonElement("Leave",roomBar,Vector2.zero,Vector2.one,()=>session.Leave());
             captionPanel=Box("Match caption",safe,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);caption=Label("",captionPanel,Vector2.zero,Vector2.one,25,Color.white,true,TextAnchor.MiddleCenter);
+            captionPanel.GetComponent<Image>().raycastTarget=false;
         }
         void BuildCamera()
         {
             cameraPanel=Box("Front camera",safe,Vector2.one,Vector2.zero,Vector2.one,Vector2.one,Ink);
+            cameraCard=cameraPanel.gameObject.AddComponent<Button>();cameraCard.transition=Selectable.Transition.None;cameraCard.targetGraphic=cameraPanel.GetComponent<Image>();cameraCard.navigation=new Navigation{mode=Navigation.Mode.None};
+            cameraCard.onClick.AddListener(()=>{if(session.Connected)TogglePreview();else CameraSetup();});
             cameraTag=Label("FRONT CAMERA",cameraPanel,Vector2.zero,Vector2.one,14,Cyan,true);
             cameraFrame=Box("Camera frame",cameraPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
             var image=LayoutRect("Front facing preview",cameraFrame,Vector2.zero,Vector2.one,new Vector2(3,3),new Vector2(-3,-3));
@@ -124,7 +136,7 @@ namespace Staredown
             image.gameObject.AddComponent<AspectRatioFitter>().aspectMode=AspectRatioFitter.AspectMode.FitInParent;
             cameraStatus=Label("Camera is off",cameraPanel,Vector2.zero,Vector2.one,16,Color.white);
             cameraPrivacy=Label("Preview only",cameraPanel,Vector2.zero,Vector2.one,13,Muted);
-            cameraToggle=ButtonElement("Enable camera",cameraPanel,Vector2.zero,Vector2.one,()=>session.Act("camera"),true);cameraToggleLabel=cameraToggle.GetComponentInChildren<Text>();Fit(cameraToggleLabel,15,19);
+            cameraToggle=ButtonElement("Enable camera",cameraPanel,Vector2.zero,Vector2.one,CameraSetup,true);cameraToggleLabel=cameraToggle.GetComponentInChildren<Text>();Fit(cameraToggleLabel,15,19);
         }
         void BuildControls()
         {
@@ -157,9 +169,13 @@ namespace Staredown
             voiceToggle=ButtonElement("Voice on",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("voice"));voiceLabel=voiceToggle.GetComponentInChildren<Text>();
             voiceStatus=Label("",settingsPanel,Vector2.zero,Vector2.one,17,Muted);
             portraitChoice=ButtonElement("Portrait",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetLandscapeMode(false));landscapeChoice=ButtonElement("Landscape",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetLandscapeMode(true));
-            calibrate=ButtonElement("Enable camera",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act(session.MobileCamera!=null&&session.MobileCamera.Running?"calibrate":"camera"),true);
+            calibrate=ButtonElement("Calibrate eyes",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("calibrate"),true);
+            cameraPower=ButtonElement("Enable camera",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("camera"));
             calibrationStatus=Label("",settingsPanel,Vector2.zero,Vector2.one,18,Muted);
+            diagnosticsTitle=Label("TRACKING DIAGNOSTICS",settingsPanel,Vector2.zero,Vector2.one,16,Cyan,true);
+            diagnosticsText=Label("",settingsPanel,Vector2.zero,Vector2.one,14,Muted);
             settingsName=ButtonElement("Edit your name",settingsPanel,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));settingsLeave=ButtonElement("Leave room",settingsPanel,Vector2.zero,Vector2.one,()=>{ShowSettings(false);session.Leave();});
+            fill.transform.SetParent(settingsPanel,false);
         }
         void BuildNameEditor()
         {
@@ -230,6 +246,16 @@ namespace Staredown
             if(shown){ShowNameEditor(false);PauseTouches();}
             settingsPanel.gameObject.SetActive(shown);UpdateModal();
         }
+        void CameraSetup()
+        {
+            if(session.MobileCamera!=null&&session.MobileCamera.CameraEnabledIntent)ShowSettings(true);
+            else session.Act("camera");
+        }
+        public void TogglePreview()
+        {
+            if(!session.Connected)return;previewExpanded=!previewExpanded;layoutReady=false;
+            ApplyLayout(layoutSize.x,layoutSize.y,portrait,true,session.State.phase==(int)MatchPhase.Lobby,session.Hosting);
+        }
         void PauseTouches(){joystick?.Release();lookPad?.Release();if(dancePicker!=null)dancePicker.gameObject.SetActive(false);}
         void UpdateModal(){scrim.gameObject.SetActive(SettingsVisible||NameEditorVisible);settingsButton.transform.SetAsLastSibling();}
 
@@ -237,33 +263,45 @@ namespace Staredown
         {
             if(session==null||canvas==null)return;UpdateSafeArea();
             bool connected=session.Connected;var state=session.State??new ArenaState();bool lobby=state.phase==(int)MatchPhase.Lobby;
+            if(connected!=wasConnected){previewExpanded=false;layoutReady=false;if(connected)movementHintUntil=Time.unscaledTime+4;}
+            if(connected&&session.CanMove&&!wasCanMove)movementHintUntil=Time.unscaledTime+4;
+            wasConnected=connected;wasCanMove=session.CanMove;
             if(connected&&!lobby&&NameEditorVisible)ShowNameEditor(false);
             if(!layoutReady||connected!=lastConnected||lobby!=lastLobby||session.Hosting!=lastHosting)ApplyLayout(layoutSize.x,layoutSize.y,portrait,connected,lobby,session.Hosting);
             home.gameObject.SetActive(!connected);brand.gameObject.SetActive(!connected);brandTag.gameObject.SetActive(!connected);roomBar.gameObject.SetActive(connected);
             bool modal=SettingsVisible||NameEditorVisible;
-            lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(connected&&!modal);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
+            lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(false);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
             dance.gameObject.SetActive(connected&&!modal);dance.interactable=session.CanDance;
             if(!connected||!session.CanDance||modal)dancePicker.gameObject.SetActive(false);
             bool validDraft=StarePlayerName.IsValid(playerName.text);
             practice.interactable=host.interactable=!session.Busy&&validDraft;join.interactable=!session.Busy&&validDraft&&StareRelayNetwork.ValidCode(code.text);
             homeStatus.text=entryError.Length>0?entryError:!validDraft?"Enter your name to continue.":session.Status;
-            leave.interactable=!session.Busy;editPlayerName.gameObject.SetActive(lobby);nameButtonLabel.text=session.PlayerName;
+            leave.gameObject.SetActive(false);editPlayerName.gameObject.SetActive(false);nameButtonLabel.text=session.PlayerName;
             roomLabel.text=string.IsNullOrEmpty(session.RoomCode)?"PRACTICE":"ROOM "+session.RoomCode;
-            roomStatus.text=state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots";
+            roomStatus.text=lobby?state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots":"Round "+state.round+" · "+state.fighters.Count(f=>f.alive)+" remaining";
             fill.gameObject.SetActive(session.Hosting&&lobby);fill.interactable=!session.Busy;fillLabel.text=state.botFill?"Humans + bots":"Humans only";
             var mobileCamera=session.MobileCamera;bool running=mobileCamera!=null&&mobileCamera.Running;
+            bool enabledIntent=mobileCamera!=null&&mobileCamera.CameraEnabledIntent,recovering=mobileCamera!=null&&mobileCamera.Recovering;
             bool localReady=running&&mobileCamera.Valid&&mobileCamera.Ready;
             bool rosterReady=state.fighters.Length>=2&&state.fighters.All(f=>f.bot||f.ready&&f.valid);
-            start.gameObject.SetActive(session.Hosting&&lobby);start.interactable=!session.Busy&&session.HasPlayerName&&localReady&&rosterReady;
-            startLabel.text=!running?"Enable camera":!localReady?"Calibrate first":!rosterReady?"Waiting for players":"Start match";
+            start.gameObject.SetActive(session.Hosting&&lobby&&!modal);start.interactable=!session.Busy&&session.HasPlayerName&&localReady&&rosterReady;
+            startLabel.text=localReady&&!rosterReady?"Waiting…":"Start match";
             var local=state.fighters.FirstOrDefault(f=>f.id==session.LocalId);
-            caption.text=MatchCaption(state,local,session.Status);captionPanel.gameObject.SetActive(connected&&!modal&&!string.IsNullOrEmpty(caption.text));
-            movementHint.gameObject.SetActive(connected&&!modal);movementHint.text=session.CanMove?(local!=null&&!local.alive?"Move outside the fields":"Left thumb to move"):"Your position is held during the stare";
+            caption.text=MatchCaption(state,local,session.Status);
+            if(caption.text!=previousCaption){previousCaption=caption.text;captionChangedAt=Time.unscaledTime;}
+            bool active=local!=null&&local.alive&&local.pair>=0&&local.pair<state.pairs.Length&&state.pairs[local.pair].winner<0;
+            bool urgent=active&&(!local.valid||state.trackingPaused),countdown=active&&state.phase==(int)MatchPhase.Countdown;
+            bool freshCaption=Time.unscaledTime-captionChangedAt<(state.phase==(int)MatchPhase.Champion?5:3);
+            captionPanel.gameObject.SetActive(connected&&!modal&&!string.IsNullOrEmpty(caption.text)&&(urgent||countdown||freshCaption));
+            movementHint.gameObject.SetActive(connected&&!modal&&session.CanMove&&Time.unscaledTime<movementHintUntil);
+            movementHint.text=local!=null&&!local.alive?"Left thumb: move outside fields · Swipe: look":"Left thumb: move · Swipe: look";
             bool live=running&&connected&&!string.IsNullOrEmpty(session.RoomCode);
-            cameraTag.text=live?"LIVE · FRONT CAMERA":"FRONT CAMERA";
-            cameraStatus.text=mobileCamera!=null?mobileCamera.Status:"Camera unavailable";
-            cameraPrivacy.text=live?"Shared in this room":"Preview only";
-            cameraToggleLabel.text=running?"Camera off":"Enable camera";
+            cameraTag.text=connected?(previewExpanded?"YOUR CAMERA −":live?"YOU · LIVE +":"YOU +"):"YOUR CAMERA";
+            cameraStatus.text=recovering?"Resuming camera…":!enabledIntent?"Camera off":!running?"Starting camera…":!mobileCamera.Valid?"Face not visible":!mobileCamera.Ready?"Calibrating "+mobileCamera.CalibrationPercent+"%":"Eyes tracked";
+            cameraStatus.color=localReady?Cyan:enabledIntent?new Color(1,.76f,.47f):Muted;
+            cameraPrivacy.text=live?"Shared in this room":enabledIntent?"Room video when joined":"Enable once to track blinks";
+            cameraPrivacy.gameObject.SetActive(!connected);cameraToggle.gameObject.SetActive(!connected);
+            cameraToggleLabel.text=enabledIntent?"Camera settings":"Enable camera";
             preview.texture=mobileCamera!=null?mobileCamera.Preview:null;preview.enabled=running&&preview.texture!=null;
             if(preview.texture!=null)preview.GetComponent<AspectRatioFitter>().aspectRatio=(float)preview.texture.width/Mathf.Max(1,preview.texture.height);
             musicToggle.GetComponentInChildren<Text>().text=session.MusicEnabled?"Music on":"Music off";Selected(musicToggle,session.MusicEnabled);
@@ -272,21 +310,23 @@ namespace Staredown
             micLabel.text=voice==null?"Microphone":!voice.MicPermissionGranted?"Enable mic":voice.MicMuted?"Unmute mic":"Mute mic";
             voiceLabel.text=voice!=null&&voice.VoiceEnabled?"Voice on":"Voice off";voiceStatus.text=voice!=null?voice.Status:"Join an online room for proximity chat.";
             portraitChoice.GetComponentInChildren<Text>().text="Portrait";landscapeChoice.GetComponentInChildren<Text>().text="Landscape";Selected(portraitChoice,!session.LandscapeMode);Selected(landscapeChoice,session.LandscapeMode);
-            calibrate.GetComponentInChildren<Text>().text=running?"Calibrate eyes":"Enable camera";
-            calibrationStatus.text=mobileCamera==null?"Front-camera tracking unavailable.":running?mobileCamera.Status+"\nKeep both eyes open and face the camera.":"Turn on your front camera to track blinks.";
+            calibrate.interactable=running&&!recovering;
+            cameraPower.GetComponentInChildren<Text>().text=enabledIntent?"Camera off":"Enable camera";
+            calibrationStatus.text=mobileCamera==null?"Front camera unavailable.":recovering?"Resuming the camera you enabled…":mobileCamera.Status;
+            if(SettingsVisible)diagnosticsText.text=session.PerformanceSummary;
             settingsName.interactable=!connected||lobby;settingsLeave.gameObject.SetActive(connected);
             nameConfirm.interactable=StarePlayerName.IsValid(nameEditorInput.text)&&!session.Busy;
         }
         public static string MatchCaption(ArenaState state,Fighter local,string status)
         {
-            if(state==null||local==null)return status??"";
+            if(state==null||local==null)return "";
             if(state.phase==(int)MatchPhase.Champion){var winner=state.fighters.FirstOrDefault(f=>f.id==state.winner);return state.winner==local.id?"You are the champion!":winner!=null?winner.name+" wins!":"Match complete";}
-            if(!local.alive)return local.status!=null&&local.status.StartsWith("FACE LOST")?"Face left camera · you're out":"You're out · explore outside the fields";
+            if(!local.alive)return local.status!=null&&local.status.StartsWith("FACE LOST")?"Face left camera · you're out":"You're out";
             bool active=local.pair>=0&&local.pair<state.pairs.Length&&state.pairs[local.pair].winner<0;
             if(active&&state.trackingPaused)return "Tracking paused · face your camera";
-            if(active&&state.phase==(int)MatchPhase.Countdown)return "Blink now · starts in "+Mathf.CeilToInt(state.remaining);
-            if(active&&state.phase==(int)MatchPhase.Duel)return !local.valid?"Face not visible · return now or you lose":"Keep your eyes open";
-            if(state.phase==(int)MatchPhase.Lobby)return !local.ready||!local.valid?"Eyes open · calibrate before the host starts":"Ready · explore while the host prepares";
+            if(active&&state.phase==(int)MatchPhase.Countdown)return "Get ready · "+Mathf.CeilToInt(state.remaining);
+            if(active&&state.phase==(int)MatchPhase.Duel)return !local.valid?"Face not visible · return to camera":"";
+            if(state.phase==(int)MatchPhase.Lobby)return "";
             return "You advanced · next round soon";
         }
         void UpdateSafeArea()
@@ -314,7 +354,8 @@ namespace Staredown
         {
             if(width<=0||height<=0)return;layoutReady=true;lastConnected=connected;lastLobby=lobby;lastHosting=hosting;
             const float margin=16;
-            Place(settingsButton.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-margin,-12),new Vector2(160,70));
+            Place(settingsButton.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-margin,-12),new Vector2(connected?112:160,connected?64:70));
+            StretchLabel(settingsButton.GetComponentInChildren<Text>(),6,3);Fit(settingsButton.GetComponentInChildren<Text>(),18,connected?21:23);
             Put(brand,new Vector2(16,-13),new Vector2(width-190,36),30);Put(brandTag,new Vector2(18,-51),new Vector2(width-190,24),16);
             float homeWidth=tall?width-32:Mathf.Min(408,width-282);float homeTop=tall?88:82;float homeHeight=tall?784:Mathf.Min(484,height-homeTop-12);
             Place(home,new Vector2(0,1),new Vector2(0,1),new Vector2(margin,-homeTop),new Vector2(homeWidth,homeHeight));
@@ -333,57 +374,62 @@ namespace Staredown
                 Put(homeHint,new Vector2(20,-199),new Vector2(inner,42),14);PlaceButton(practice,20,homeHeight-232,inner,54,21);PlaceButton(host,20,homeHeight-166,inner,54,21);
                 FieldPlace(code,new Vector2(20,-(homeHeight-100)),new Vector2(inner-122,54));PlaceButton(join,homeWidth-128,homeHeight-100,108,54,21);Put(homeStatus,new Vector2(20,-(homeHeight-38)),new Vector2(inner,28),16);
             }
-            float cameraWidth=tall?188:218,cameraHeight=328;
-            Place(cameraPanel,Vector2.one,Vector2.one,new Vector2(-margin,tall?-100:-88),new Vector2(cameraWidth,cameraHeight));
-            Put(cameraTag,new Vector2(12,-10),new Vector2(cameraWidth-24,22),14);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-40),new Vector2(cameraWidth-24,136));
-            Put(cameraStatus,new Vector2(12,-184),new Vector2(cameraWidth-24,43),16);Put(cameraPrivacy,new Vector2(12,-229),new Vector2(cameraWidth-24,18),12);PlaceButton(cameraToggle,12,252,cameraWidth-24,64,17);
-            float roomWidth=tall?width-cameraWidth-48:Mathf.Min(width-194,780);float roomHeight=tall?(lobby?(hosting?306:164):100):84;
-            Place(roomBar,new Vector2(0,1),new Vector2(0,1),new Vector2(16,tall?-88:-12),new Vector2(roomWidth,roomHeight));
-            if(tall)
+            float cameraWidth=connected?(previewExpanded?218:132):(tall?188:218),cameraHeight=connected?(previewExpanded?252:152):328;
+            Place(cameraPanel,Vector2.one,Vector2.one,new Vector2(-margin,connected?-88:tall?-100:-88),new Vector2(cameraWidth,cameraHeight));
+            if(connected&&!previewExpanded)
             {
-                Put(roomLabel,new Vector2(14,-12),new Vector2(roomWidth-126,36),27);Put(roomStatus,new Vector2(14,-61),new Vector2(roomWidth-28,30),18);
-                PlaceButton(leave,roomWidth-108,12,94,48,19);PlaceButton(editPlayerName,14,104,roomWidth-28,48,20);PlaceButton(fill,14,164,roomWidth-28,54,21);PlaceButton(start,14,230,roomWidth-28,60,21);
-                float captionTop=lobby?440:218;
-                Place(captionPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-captionTop),new Vector2(lobby?width-32:roomWidth,lobby?70:124));
+                Put(cameraTag,new Vector2(8,-6),new Vector2(cameraWidth-16,16),12);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(8,-25),new Vector2(cameraWidth-16,96));
+                Put(cameraStatus,new Vector2(8,-124),new Vector2(cameraWidth-16,22),14);Fit(cameraStatus,12,14);
+            }
+            else if(connected)
+            {
+                Put(cameraTag,new Vector2(12,-8),new Vector2(cameraWidth-24,18),13);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-34),new Vector2(cameraWidth-24,154));
+                Put(cameraStatus,new Vector2(12,-200),new Vector2(cameraWidth-24,40),16);Fit(cameraStatus,14,16);
             }
             else
             {
-                Put(roomLabel,new Vector2(14,-10),new Vector2(Mathf.Max(130,roomWidth-488),30),24);Put(roomStatus,new Vector2(14,-46),new Vector2(Mathf.Max(130,roomWidth-488),24),16);
-                float offset=roomWidth-452;PlaceButton(editPlayerName,offset,14,134,54,17);PlaceButton(fill,offset+146,14,116,54,17);PlaceButton(start,offset+274,14,100,54,17);PlaceButton(leave,offset+386,14,54,54,16);
-                float captionWidth=Mathf.Min(420,width-cameraWidth-68);Place(captionPanel,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(-30,-108),new Vector2(captionWidth,68));
+                Put(cameraTag,new Vector2(12,-10),new Vector2(cameraWidth-24,22),14);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-40),new Vector2(cameraWidth-24,136));
+                Put(cameraStatus,new Vector2(12,-184),new Vector2(cameraWidth-24,43),16);Fit(cameraStatus,14,16);Put(cameraPrivacy,new Vector2(12,-229),new Vector2(cameraWidth-24,18),12);PlaceButton(cameraToggle,12,252,cameraWidth-24,64,17);
             }
-            StretchLabel(caption,12,8);Fit(caption,16,tall?24:22);
+            float roomWidth=Mathf.Min(width-160,560);
+            Place(roomBar,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-12),new Vector2(roomWidth,64));
+            Put(roomLabel,new Vector2(12,-7),new Vector2(roomWidth-24,29),22);Put(roomStatus,new Vector2(12,-39),new Vector2(roomWidth-24,19),14);
+            Place(start.GetComponent<RectTransform>(),new Vector2(.5f,0),new Vector2(.5f,0),new Vector2(0,48),new Vector2(152,64));StretchLabel(startLabel,7,4);Fit(startLabel,18,22);
+            Place(captionPanel,new Vector2(.5f,0),new Vector2(.5f,0),new Vector2(0,204),new Vector2(Mathf.Min(width-48,420),54));StretchLabel(caption,12,7);Fit(caption,16,22);
             Place(joystick.GetComponent<RectTransform>(),Vector2.zero,Vector2.zero,new Vector2(28,52),new Vector2(144,144));
             Place(dance.GetComponent<RectTransform>(),new Vector2(1,0),new Vector2(1,0),new Vector2(-20,48),new Vector2(134,60));
             Place(dancePicker,new Vector2(1,0),new Vector2(1,0),new Vector2(-20,120),new Vector2(238,300));
-            Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,14),new Vector2(tall?width-40:width-350,30));
+            Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,10),new Vector2(width-40,30));Fit(movementHint,14,16);
             Place(lookHint.rectTransform,new Vector2(1,0),new Vector2(1,0),new Vector2(-174,59),new Vector2(tall?190:250,36));
             LayoutSettings(width,height,tall);LayoutName(width,height,tall);
         }
         void LayoutSettings(float width,float height,bool tall)
         {
-            float panelWidth=tall?width-32:Mathf.Min(800,width-32),panelHeight=tall?740:452;
+            float panelWidth=tall?width-32:Mathf.Min(800,width-32),panelHeight=tall?800:480;
             float top=tall?84:Mathf.Max(76,(height-panelHeight)*.5f);
             Place(settingsPanel,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(0,-top),new Vector2(panelWidth,panelHeight));
             PlaceButton(settingsDone,panelWidth-110,14,90,64,20);
-            float inner=panelWidth-40;
+            float inner=panelWidth-40;bool showBots=session.Connected&&session.Hosting&&session.State.phase==(int)MatchPhase.Lobby;
             if(tall)
             {
                 Put(musicLabel,new Vector2(20,-84),new Vector2(inner-150,34),24);PlaceButton(musicToggle,panelWidth-154,76,134,54,20);
                 Place(musicVolume.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),new Vector2(24,-145),new Vector2(inner-68,50));Put(musicPercent,new Vector2(panelWidth-78,-152),new Vector2(56,30),18);
-                float half=(inner-12)*.5f;PlaceButton(mic,20,216,half,58,20);PlaceButton(voiceToggle,32+half,216,half,58,20);Put(voiceStatus,new Vector2(20,-287),new Vector2(inner,69),17);
-                PlaceButton(portraitChoice,20,376,half,62,22);PlaceButton(landscapeChoice,32+half,376,half,62,22);
-                PlaceButton(calibrate,20,462,inner,62,23);Put(calibrationStatus,new Vector2(20,-537),new Vector2(inner,62),18);
-                PlaceButton(settingsName,20,614,inner,50,21);PlaceButton(settingsLeave,20,678,inner,50,21);
+                float half=(inner-12)*.5f;PlaceButton(mic,20,216,half,58,20);PlaceButton(voiceToggle,32+half,216,half,58,20);Put(voiceStatus,new Vector2(20,-287),new Vector2(inner,52),14);
+                PlaceButton(portraitChoice,20,354,half,58,22);PlaceButton(landscapeChoice,32+half,354,half,58,22);
+                PlaceButton(calibrate,20,438,half,58,20);PlaceButton(cameraPower,32+half,438,half,58,20);Put(calibrationStatus,new Vector2(20,-508),new Vector2(inner,36),16);
+                Put(diagnosticsTitle,new Vector2(20,-556),new Vector2(inner,22),16);Put(diagnosticsText,new Vector2(20,-582),new Vector2(inner,70),14);
+                PlaceButton(settingsName,20,666,showBots?half:inner,50,20);PlaceButton(fill,32+half,666,half,50,18);PlaceButton(settingsLeave,20,730,inner,54,21);
             }
             else
             {
                 float column=(inner-24)*.5f,right=44+column;
                 Put(musicLabel,new Vector2(20,-80),new Vector2(column-132,34),23);PlaceButton(musicToggle,20+column-124,72,124,52,19);
                 Place(musicVolume.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),new Vector2(24,-139),new Vector2(column-66,50));Put(musicPercent,new Vector2(20+column-53,-150),new Vector2(53,30),17);
-                float half=(column-10)*.5f;PlaceButton(mic,20,206,half,56,18);PlaceButton(voiceToggle,30+half,206,half,56,18);Put(voiceStatus,new Vector2(20,-276),new Vector2(column,77),16);PlaceButton(settingsName,20,370,column,56,20);
+                float half=(column-10)*.5f;PlaceButton(mic,20,206,half,56,18);PlaceButton(voiceToggle,30+half,206,half,56,18);Put(voiceStatus,new Vector2(20,-276),new Vector2(column,58),14);
+                PlaceButton(settingsName,20,354,showBots?half:column,50,17);PlaceButton(fill,30+half,354,half,50,17);PlaceButton(settingsLeave,20,418,column,48,20);
                 PlaceButton(portraitChoice,right,82,half,56,19);PlaceButton(landscapeChoice,right+half+10,82,half,56,19);
-                PlaceButton(calibrate,right,204,column,58,21);Put(calibrationStatus,new Vector2(right,-276),new Vector2(column,77),17);PlaceButton(settingsLeave,right,370,column,56,20);
+                PlaceButton(calibrate,right,154,column,54,21);PlaceButton(cameraPower,right,218,column,54,21);Put(calibrationStatus,new Vector2(right,-286),new Vector2(column,36),16);
+                Put(diagnosticsTitle,new Vector2(right,-338),new Vector2(column,22),15);Put(diagnosticsText,new Vector2(right,-366),new Vector2(column,96),14);
             }
         }
         void LayoutName(float width,float height,bool tall)

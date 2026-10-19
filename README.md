@@ -19,7 +19,7 @@ The Mac used for the original export had Xcode 16.2/iOS SDK 18.2. Native compila
 
 ## Mobile controls
 
-The app opens in portrait. Enter your arena name before Practice/Create/Join. Tap Settings at the top right to mute music or change its volume, switch portrait/landscape, manage voice/mic, or recalibrate eyes. Tap Enable camera, keep both eyes open facing the front camera until it shows READY, and then start. The local preview is mirrored like a selfie; other contestants receive the upright real view.
+The app opens in portrait. Once you enable the camera, permission interruptions recover automatically in the foreground. In-room controls use a slim bar and a small preview; tap the preview to expand it. Enter your arena name before Practice/Create/Join. Tap Settings at the top right to mute music or change its volume, switch portrait/landscape, manage voice/mic, or recalibrate eyes. Tap Enable camera, keep both eyes open facing the front camera until it shows READY, and then start. The local preview is mirrored like a selfie; other contestants receive the upright real view. The prototype social video is capped at 6 FPS; eye capture has its own native sample queue and requests 60 Hz where supported. Settings diagnostics show actual achieved rates. See `MOBILE_STREAMING_BUDGET.json` for scaling limits.
 
 ## Device and online setup
 
@@ -46,6 +46,6 @@ The app opens in portrait. Enter your arena name before Practice/Create/Join. Ta
 
 ## Validation status
 
-The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Physical iPhone camera accuracy, installation, and sustained performance still need device validation. The latest Unity iPhone export is version 1.1.3 build 6 from Unity 6000.3.26f1 LTS and passed its native scene lifecycle checks; no new native IPA or TestFlight upload has been produced. See `VALIDATION.md`.
+The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Physical iPhone camera accuracy, installation, and sustained performance still need device validation. The latest Unity iPhone export is version 1.1.4 build 7 from Unity 6000.3.26f1 LTS and passed its native scene lifecycle checks; no new native IPA or TestFlight upload has been produced. See `VALIDATION.md`.
 
 `SOURCE_SNAPSHOT.json` identifies the local source checkpoint used for this upload. No open-source license is granted to the game or bundled third-party content by uploading it here.

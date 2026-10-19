@@ -9,11 +9,12 @@ namespace Staredown
   readonly RenderTexture[] feeds=new RenderTexture[2];readonly Plane[] frustum=new Plane[6];
   float next,averageFrame,slowFor,recoveredFor;bool rendering,phone,budgetLimited;
   public int Captures {get;private set;}
-  // Faster mirror motion is a secondary budget: keep the main game responsive
+  // Mirror motion is a secondary budget: phone blink detection gets priority.
+  // Keep the main game responsive
   // when a phone is hot or the renderer has sustained missed frame deadlines.
   public float RefreshRate=>TargetRefreshRate(phone,phoneSession!=null&&phoneSession.MobileCamera!=null?phoneSession.MobileCamera.ThermalLevel:0,budgetLimited);
   public static float TargetRefreshRate(bool phone,int thermal,bool frameLimited)
-  {return phone?(thermal>=3?3:thermal>=2||frameLimited?6:12):frameLimited?8:12;}
+  {return phone?(thermal>=2||frameLimited?3:6):frameLimited?8:12;}
   public static float NextCaptureTime(float now,float scheduled,float rate)
   {
    float interval=1/Mathf.Max(1,rate);

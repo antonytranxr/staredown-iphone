@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-19",
+  "phone_version": "1.1.4",
+  "phone_build": 7,
+  "before_checkpoint": "checkpoint/2026-10-19-before-mobile-reliability",
+  "changes": [
+    "Camera enabled intent survives OS interruption and resumes in foreground; manual off and first-launch opt-in remain explicit",
+    "256-sample native eye FIFO; replay capture timestamps independent of Unity/render cadence; overflow faults readiness",
+    "JPEG worker uses separate queue with one retained pixel buffer and no retained ARFrame",
+    "Prefer supported60Hz eye capture, fall back to30Hz; actual capture rate measured separately",
+    "Require at least2 closed samples spanning30ms; preserve threshold and noise rejection; Go capture cutoff excludes queued countdown blinks",
+    "Compact in-room UI, expandable corner preview, center swipe region, transient instructions, Settings diagnostics",
+    "Stable video head with clearly marked frozen/connecting state; consent-off/disconnect removes feed immediately",
+    "Borrow local canonical preview instead of decoding its JPEG twice",
+    "Phone mirror6Hz/3Hz under pressure; Quest12Hz/8Hz unchanged",
+    "Place local player before publishing initial room position"
+  ],
+  "validation": {
+    "native_policy_checks": 449,
+    "native_arm64_ios15_arc_syntax": "passed",
+    "unity_detector_cadence_checks": 58,
+    "latest_only_polling_missed_blink_fixtures": 24,
+    "new_capture_history_passed_blink_fixtures": 24,
+    "unity_provider_batch_checks": 9,
+    "camera_orientation_calibration_checks": 98,
+    "camera_recovery_checks": 4,
+    "video_stability_ownership_mirror_checks": 20,
+    "profile_settings_entry_checks": 23,
+    "scene_camera_touch_checks": 19,
+    "camera_continuity_checks": 14,
+    "ui_raycast_layout_camera_once_checks": 95,
+    "mirror_simulation_checks": 766,
+    "export_verifier_synthetic_fixtures": 11
+  },
+  "recovery_video": "4 camera intent/pause/foreground recovery checks passed\n20 video stability / preview ownership / phone mirror checks passed",
+  "live_relay_blink_round": "Live numeric Relay room: phone host + VR protocol peer +14bots; calibrated camera feed received; phone camera blink caused authoritative elimination; eliminated phone can roam",
+  "live_relay_face_loss_round": "Live four-digit Relay: saved phone-host name and sender-attributed Quest Friend name; phone face absent forfeited in 1.06 model seconds with no tracking pause/countdown reset; 3 fresh JPEGs reached Quest while face absent; camera stayed live and spectator movement available",
+  "ui_captures": [
+    "outputs/Mobile-reliability-2026-10-19/landscape-home.png",
+    "outputs/Mobile-reliability-2026-10-19/landscape-practice-lobby.png",
+    "outputs/Mobile-reliability-2026-10-19/landscape-settings.png",
+    "outputs/Mobile-reliability-2026-10-19/portrait-home.png",
+    "outputs/Mobile-reliability-2026-10-19/portrait-practice-lobby.png",
+    "outputs/Mobile-reliability-2026-10-19/portrait-settings.png"
+  ],
+  "iphone_export": {
+    "result": "Succeeded",
+    "errors": 0,
+    "warnings": 3,
+    "duration_seconds": 48.512,
+    "validation": {
+      "ok": true,
+      "checks": 33,
+      "passed": 33,
+      "failed": [],
+      "export": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/outputs/Staredown-iOS-1.1.4-build7",
+      "version": "1.1.4",
+      "build": "7",
+      "nativeCameraSha256": "910d871b11027482f2fd393f314ff2f7bb83a1e575f2745df99c345dd3f2e82a",
+      "expectedNativeCameraSha256": "910d871b11027482f2fd393f314ff2f7bb83a1e575f2745df99c345dd3f2e82a",
+      "nativeSymbolFiles": {
+        "orientation": [
+          "Il2CppOutputProject/Source/il2cppOutput/Assembly-CSharp__3.cpp"
+        ],
+        "drain_samples": [
+          "Il2CppOutputProject/Source/il2cppOutput/Assembly-CSharp__3.cpp"
+        ],
+        "latest_capture_timestamp": [
+          "Il2CppOutputProject/Source/il2cppOutput/Assembly-CSharp__3.cpp"
+        ]
+      }
+    }
+  },
+  "limits": [
+    "Native capture accuracy and achieved rate are unmeasured on a physical iPhone; known paired iPhone is offline",
+    "All eye/blink inputs in Unity and Relay tests were synthetic; 60Hz is a requested supported format, not a guaranteed achieved rate",
+    "Social video remains6Hz boundedJPEG thumbnails (4Hz under serious thermal pressure); hardware-codec media transport not implemented",
+    "No new signed IPA/TestFlight upload; no Android phone or Quest APK built"
+  ],
+  "restored_editor": {
+    "scene": "Assets/Staredown/Scenes/Staredown.unity",
+    "target": "Android",
+    "playing": false,
+    "desktop_xr": true
+  },
+  "sources": {
+    "apple_capture_format": "https://developer.apple.com/documentation/arkit/arconfiguration/videoformat-swift.class",
+    "apple_frame_timestamp": "https://developer.apple.com/documentation/arkit/arframe/timestamp",
+    "apple_hardware_codec": "https://developer.apple.com/videos/play/wwdc2021/10158/"
+  }
+}

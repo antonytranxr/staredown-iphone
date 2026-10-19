@@ -74,6 +74,29 @@ int main(int argc,char **argv) {
     check(!StareMobileFrameCanCommit(true,false,4,4,100,100.2),"replaced session rejects old frame");
     check(!StareMobileFrameCanCommit(true,true,4,4,100,99),"future capture time cannot become fresh frame");
     check(!StareMobileFrameCanCommit(true,true,4,4,NAN,100),"nonfinite capture time rejected");
+    near(StareMobileCaptureObservedAt(100,10,10),100,"fresh callback has no queued capture lag");
+    near(StareMobileCaptureObservedAt(100,10,10.4),99.6,"real capture lag is carried into sample and JPEG age");
+    check(!StareMobileFrameCanCommit(true,true,1,1,StareMobileCaptureObservedAt(100,10,11),100),"old queued capture cannot become fresh on delivery");
+    StareMobileEyeRing ring;StareMobileEyeSample drained[StareMobileEyeRing::Capacity];long long lost;
+    for(int i=0;i<4;i++)ring.push({i+1,i/60.0,i/60.0,true,0,i==1||i==2?1.f:0.f,i==1||i==2?1.f:0.f,0,0});
+    int drainedCount=ring.drain(drained,&lost);
+    check(drainedCount==4&&lost==0,"sample batch keeps every capture even if latest eyes are open");
+    check(drained[1].left==1&&drained[2].left==1&&drained[3].left==0,"intermediate closed samples survive a late poll");
+    for(int i=0;i<StareMobileEyeRing::Capacity+7;i++)ring.push({i+1,i/60.0,i/60.0,true,0,0,0,0,0});
+    drainedCount=ring.drain(drained,&lost);
+    check(drainedCount==StareMobileEyeRing::Capacity&&lost==7&&ring.dropped==7,"bounded sample ring explicitly reports overwritten history");
+    check(drained[0].sequence==8&&drained[drainedCount-1].sequence==StareMobileEyeRing::Capacity+7,"overflow retains ordered newest capture window");
+    check(ring.drain(drained,&lost)==0&&lost==0&&ring.dropped==7,"drain clears only pending overflow and retains diagnostics");
+    for(int captureHz:{30,60})for(int renderHz:{5,10,15}) {
+        ring.reset();double nextDrain=0;int delivered=0;
+        for(int frame=0;frame<captureHz*3;frame++) {
+            double time=frame/(double)captureHz;ring.push({frame+1,time,time,true,0,0,0,0,0});
+            if(time+.000001>=nextDrain) {
+                nextDrain+=1.0/renderHz;delivered+=ring.drain(drained,&lost);check(lost==0,"5/10/15FPS drains never overflow native30/60Hz eye history");
+            }
+        }
+        delivered+=ring.drain(drained,&lost);check(delivered==captureHz*3&&lost==0,"slow render polls consume every captured sample exactly once");
+    }
     fixtures<<"]}";
     if(argc>1) { std::ofstream file(argv[1]);file<<fixtures.str();if(!file)throw std::runtime_error("Cannot write native pose fixtures"); }
     std::cout<<checks<<" native camera pose/orientation/mirroring checks passed; 32 native pose fixtures generated"<<std::endl;

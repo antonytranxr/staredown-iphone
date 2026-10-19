@@ -50,7 +50,7 @@ namespace Staredown
  public sealed class StareCameraStream : MonoBehaviour
  {
   sealed class Feed
-  {public Texture2D texture;public float received=-10;}
+  {public Texture2D texture;public bool ownsTexture;public float received=-10,windowAt=-1,framesPerSecond;public int windowFrames;}
   sealed class Budget {public int sequence;public float tokens=2,tokenAt=-10;}
   readonly Dictionary<int,Feed> feeds=new Dictionary<int,Feed>();
   readonly Dictionary<int,Budget> budgets=new Dictionary<int,Budget>();
@@ -59,9 +59,20 @@ namespace Staredown
   readonly HashSet<int> cameraCapabilities=new HashSet<int>();
   readonly HashSet<int> disabledProfiles=new HashSet<int>();
   readonly HashSet<StareCameraHead> attached=new HashSet<StareCameraHead>();
+  readonly List<int> sweep=new List<int>();
   int publishSequence;float publishAt=-10;StareVisuals lastVisuals;
   public int AcceptedFrames {get;private set;}
   public int FeedCount=>feeds.Count;
+  public int DecodedFrames {get;private set;}
+  public int ReusedPreviewFrames {get;private set;}
+  public string DiagnosticsSummary
+  {
+   get
+   {
+    int fresh=0;float fps=0;foreach(int id in profiles)if(HasLiveFeed(id)){fresh++;fps+=FeedFramesPerSecond(id);}
+    return profiles.Count==0?"VIDEO OFF":"VIDEO "+(fresh>0?fps/fresh:0).ToString("0.0")+" FPS / "+fresh+" LIVE / "+(profiles.Count-fresh)+" STALE";
+   }
+  }
 
   public bool Handle(WireMessage message,int sender,Tournament authority,IStareTransport transport,int localId)
   {
@@ -102,7 +113,7 @@ namespace Staredown
    if(enabled){disabledProfiles.Remove(id);if(profiles.Count<Tournament.Capacity)profiles.Add(id);}
    else {disabledProfiles.Add(id);profiles.Remove(id);Remove(id);}
   }
-  bool Accept(int id,int sequence,byte[] bytes,bool rateLimit)
+  bool Accept(int id,int sequence,byte[] bytes,bool rateLimit,Texture2D canonicalPreview=null)
   {
    Budget budget;
    if(!budgets.TryGetValue(id,out budget))
@@ -118,12 +129,29 @@ namespace Staredown
    Feed feed;
    if(!feeds.TryGetValue(id,out feed))
    {if(feeds.Count>=Tournament.Capacity)return false;feed=new Feed();feeds.Add(id,feed);}
-   if(feed.texture==null)feed.texture=new Texture2D(2,2,TextureFormat.RGB24,false){name="Contender "+id+" live face",filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
-   try{if(!ImageConversion.LoadImage(feed.texture,bytes,false))return false;}catch(Exception){return false;}
+   if(canonicalPreview!=null)
+   {
+    if(feed.ownsTexture&&feed.texture!=canonicalPreview)ReleaseTexture(feed);
+    feed.texture=canonicalPreview;feed.ownsTexture=false;ReusedPreviewFrames++;
+   }
+   else
+   {
+    bool created=feed.texture==null||!feed.ownsTexture;
+    var target=created?new Texture2D(2,2,TextureFormat.RGB24,false){name="Contender "+id+" live face",filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp}:feed.texture;
+    bool decoded;try{decoded=ImageConversion.LoadImage(target,bytes,false);}catch(Exception){decoded=false;}
+    if(!decoded){if(created)Destroy(target);return false;}
+    feed.texture=target;feed.ownsTexture=true;DecodedFrames++;
+   }
+   if(feed.windowAt<0||now-feed.received>StareCameraFrameValidation.FreshSeconds){feed.windowAt=now;feed.windowFrames=1;feed.framesPerSecond=0;}
+   else
+   {
+    feed.windowFrames++;float elapsed=now-feed.windowAt;
+    if(elapsed>=1){feed.framesPerSecond=(feed.windowFrames-1)/elapsed;feed.windowAt=now;feed.windowFrames=1;}
+   }
    budget.sequence=sequence;feed.received=now;AcceptedFrames++;return true;
   }
 
-  public void Publish(byte[] jpeg,int localId,Tournament authority,IStareTransport transport)
+  public void Publish(byte[] jpeg,int localId,Tournament authority,IStareTransport transport,Texture2D canonicalPreview=null)
   {
    Fighter fighter=null;
    if(localId<0||Time.unscaledTime<publishAt)return;
@@ -134,7 +162,8 @@ namespace Staredown
    var message=new WireMessage{kind="cameraFrame",id=localId,cameraSequence=++publishSequence,cameraFrame=Convert.ToBase64String(jpeg)};
    if(Encoding.UTF8.GetByteCount(JsonUtility.ToJson(message))>StareCameraFrameValidation.MaxJson)return;
    publishAt=Time.unscaledTime+1/StareCameraFrameValidation.FramesPerSecond;
-   if(!Accept(localId,message.cameraSequence,jpeg,false))return;
+   if(canonicalPreview!=null&&(canonicalPreview.width!=width||canonicalPreview.height!=height))canonicalPreview=null;
+   if(!Accept(localId,message.cameraSequence,jpeg,false,canonicalPreview))return;
    if(authority!=null)transport?.Broadcast(message);else transport?.Send(0,message);
   }
 
@@ -145,44 +174,51 @@ namespace Staredown
    foreach(var fighter in state.fighters)
    {
     roster[fighter.id]=fighter;
-    if(fighter.phoneCamera&&!fighter.bot&&!disabledProfiles.Contains(fighter.id))profiles.Add(fighter.id);else profiles.Remove(fighter.id);
+    if(fighter.phoneCamera&&!fighter.bot&&!fighter.disconnected&&!disabledProfiles.Contains(fighter.id))profiles.Add(fighter.id);else profiles.Remove(fighter.id);
     if(visuals==null)continue;var avatar=visuals.AvatarFor(fighter.id);if(avatar==null)continue;
-    Feed feed;bool live=profiles.Contains(fighter.id)&&fighter.phoneCamera&&!fighter.bot&&!fighter.disconnected&&feeds.TryGetValue(fighter.id,out feed)&&feed.texture!=null&&Time.unscaledTime-feed.received<=StareCameraFrameValidation.FreshSeconds;
-    if(live)
+    bool enabled=profiles.Contains(fighter.id)&&fighter.phoneCamera&&!fighter.bot&&!fighter.disconnected;
+    if(enabled)
     {
      if(avatar.cameraHead==null){avatar.cameraHead=avatar.root.gameObject.AddComponent<StareCameraHead>();avatar.cameraHead.Bind(avatar);}
-     attached.Add(avatar.cameraHead);
-     avatar.cameraHead.Present(feeds[fighter.id].texture);
+     attached.Add(avatar.cameraHead);Feed feed;feeds.TryGetValue(fighter.id,out feed);
+     // Keep an enabled camera head stable through jitter. An old image is
+     // explicitly marked paused; it is never reported as a fresh live feed.
+     avatar.cameraHead.PresentVideo(feed!=null?feed.texture:null,HasLiveFeed(fighter.id));
     }
     else if(avatar.cameraHead!=null)avatar.cameraHead.Present(null);
    }
-   foreach(int id in feeds.Keys.ToArray())
-   {
-    Fighter fighter;
-    if(!roster.TryGetValue(id,out fighter)||fighter.bot||fighter.disconnected||!fighter.phoneCamera){profiles.Remove(id);Remove(id);}
-    else if(Time.unscaledTime-feeds[id].received>StareCameraFrameValidation.FreshSeconds&&feeds[id].texture!=null)
-    {Destroy(feeds[id].texture);feeds[id].texture=null;}
-   }
-   foreach(int id in profiles.ToArray())if(!roster.ContainsKey(id))profiles.Remove(id);
-   foreach(int id in cameraCapabilities.ToArray())
-   {Fighter fighter;if(!roster.TryGetValue(id,out fighter)||fighter.bot||fighter.disconnected)cameraCapabilities.Remove(id);}
-   foreach(int id in budgets.Keys.ToArray())
-   {Fighter fighter;if(!roster.TryGetValue(id,out fighter)||fighter.bot||fighter.disconnected)budgets.Remove(id);}
-   foreach(int id in disabledProfiles.ToArray())if(!roster.ContainsKey(id))disabledProfiles.Remove(id);
+   sweep.Clear();foreach(var item in feeds)
+   {Fighter fighter;if(!roster.TryGetValue(item.Key,out fighter)||fighter.bot||fighter.disconnected||!fighter.phoneCamera)sweep.Add(item.Key);}
+   foreach(int id in sweep){profiles.Remove(id);Remove(id);}
+   sweep.Clear();foreach(int id in profiles)if(!roster.ContainsKey(id))sweep.Add(id);foreach(int id in sweep)profiles.Remove(id);
+   sweep.Clear();foreach(int id in cameraCapabilities)
+   {Fighter fighter;if(!roster.TryGetValue(id,out fighter)||fighter.bot||fighter.disconnected)sweep.Add(id);}foreach(int id in sweep)cameraCapabilities.Remove(id);
+   sweep.Clear();foreach(int id in budgets.Keys)
+   {Fighter fighter;if(!roster.TryGetValue(id,out fighter)||fighter.bot||fighter.disconnected)sweep.Add(id);}foreach(int id in sweep)budgets.Remove(id);
+   sweep.Clear();foreach(int id in disabledProfiles)if(!roster.ContainsKey(id))sweep.Add(id);foreach(int id in sweep)disabledProfiles.Remove(id);
    attached.RemoveWhere(head=>head==null);
   }
   public bool HasLiveFeed(int id)
-  {Feed feed;return profiles.Contains(id)&&feeds.TryGetValue(id,out feed)&&feed.texture!=null&&Time.unscaledTime-feed.received<=StareCameraFrameValidation.FreshSeconds;}
+  {return HasCachedFeed(id)&&FeedAge(id)<=StareCameraFrameValidation.FreshSeconds;}
+  public bool HasCachedFeed(int id)
+  {Feed feed;return profiles.Contains(id)&&feeds.TryGetValue(id,out feed)&&feed.texture!=null;}
+  public bool FeedIsStale(int id)=>profiles.Contains(id)&&!HasLiveFeed(id);
+  public float FeedAge(int id)
+  {Feed feed;return feeds.TryGetValue(id,out feed)&&feed.texture!=null?Mathf.Max(0,Time.unscaledTime-feed.received):float.PositiveInfinity;}
+  public float FeedFramesPerSecond(int id)
+  {Feed feed;if(!HasLiveFeed(id)||!feeds.TryGetValue(id,out feed))return 0;float elapsed=Time.unscaledTime-feed.windowAt;return feed.framesPerSecond>0?feed.framesPerSecond:elapsed>.01f?(feed.windowFrames-1)/elapsed:0;}
+  static void ReleaseTexture(Feed feed)
+  {if(feed.ownsTexture&&feed.texture!=null)Destroy(feed.texture);feed.texture=null;feed.ownsTexture=false;}
   void Remove(int id)
   {
-   Feed feed;if(feeds.TryGetValue(id,out feed)){if(feed.texture!=null)Destroy(feed.texture);feeds.Remove(id);}
+   Feed feed;if(feeds.TryGetValue(id,out feed)){ReleaseTexture(feed);feeds.Remove(id);}
    var avatar=lastVisuals!=null?lastVisuals.AvatarFor(id):null;if(avatar!=null&&avatar.cameraHead!=null)avatar.cameraHead.Present(null);
   }
   public void Reset()
   {
    foreach(var head in attached)if(head!=null)head.Present(null);
-   foreach(var feed in feeds.Values)if(feed.texture!=null)Destroy(feed.texture);
-   feeds.Clear();budgets.Clear();roster.Clear();profiles.Clear();cameraCapabilities.Clear();disabledProfiles.Clear();attached.Clear();publishAt=-10;publishSequence=0;AcceptedFrames=0;lastVisuals=null;
+   foreach(var feed in feeds.Values)ReleaseTexture(feed);
+   feeds.Clear();budgets.Clear();roster.Clear();profiles.Clear();cameraCapabilities.Clear();disabledProfiles.Clear();attached.Clear();publishAt=-10;publishSequence=0;AcceptedFrames=DecodedFrames=ReusedPreviewFrames=0;lastVisuals=null;sweep.Clear();
   }
   void OnDestroy(){Reset();}
  }
@@ -194,8 +230,14 @@ namespace Staredown
  {
   sealed class Hidden {public Renderer renderer;public bool enabled;}
   readonly List<Hidden> hidden=new List<Hidden>();
-  CreatureView avatar;Transform head,panel;Vector3 offset;Quaternion correction;Material display,frame;bool visible;
+  CreatureView avatar;Transform head,panel,statusPanel;TextMesh videoStatus;Vector3 offset;Quaternion correction;Material display,frame;Texture shownTexture;bool visible,fresh;
+  static readonly Color FrameColor=new Color(.015f,.025f,.04f),PausedColor=new Color(1,.62f,.12f);
+  // Live retains its original meaning for portrait framing: the camera head
+  // is displayed. Fresh/Stale describe whether its actual video is current.
   public bool Live=>visible;
+  public bool Fresh=>visible&&fresh;
+  public bool Stale=>visible&&!fresh;
+  public string Status=>!visible?"CAMERA OFF":fresh?"LIVE":shownTexture!=null?"VIDEO PAUSED":"CONNECTING";
   public Vector3 PortraitFocus=>panel!=null?panel.TransformPoint(Vector3.back*.253f):transform.position+Vector3.up*1.55f;
   public int HiddenRenderers=>hidden.Count;
   public int HiddenSkinnedRenderers=>hidden.Count(item=>item.renderer is SkinnedMeshRenderer);
@@ -222,19 +264,29 @@ namespace Staredown
    }
    panel=new GameObject("Live phone camera head").transform;panel.SetParent(actor.preset,false);panel.localScale=Vector3.one;
    display=new Material(Resources.Load<Shader>("StareVideoSurface")){name="Live contestant camera"};
-   frame=new Material(Shader.Find("Standard")){name="Camera head frame",color=new Color(.015f,.025f,.04f)};frame.SetFloat("_Metallic",.55f);frame.SetFloat("_Glossiness",.55f);
+   frame=new Material(Shader.Find("Standard")){name="Camera head frame",color=FrameColor};frame.SetFloat("_Metallic",.55f);frame.SetFloat("_Glossiness",.55f);
    var backing=GameObject.CreatePrimitive(PrimitiveType.Cube);backing.name="Camera head housing";backing.transform.SetParent(panel,false);backing.transform.localScale=new Vector3(.60f,.60f,.48f);backing.GetComponent<Renderer>().sharedMaterial=frame;Destroy(backing.GetComponent<Collider>());
    var face=GameObject.CreatePrimitive(PrimitiveType.Quad);face.name="Live front camera";face.transform.SetParent(panel,false);face.transform.localPosition=Vector3.back*.253f;face.transform.localScale=new Vector3(.56f,.56f,1);face.GetComponent<Renderer>().sharedMaterial=display;Destroy(face.GetComponent<Collider>());
+   var badge=GameObject.CreatePrimitive(PrimitiveType.Cube);badge.name="Camera connection badge";badge.transform.SetParent(panel,false);badge.transform.localPosition=new Vector3(0,-.22f,-.260f);badge.transform.localScale=new Vector3(.56f,.10f,.008f);badge.GetComponent<Renderer>().sharedMaterial=frame;Destroy(badge.GetComponent<Collider>());statusPanel=badge.transform;
+   videoStatus=new GameObject("Camera connection status").AddComponent<TextMesh>();videoStatus.transform.SetParent(panel,false);videoStatus.transform.localPosition=new Vector3(0,-.22f,-.266f);videoStatus.font=actor.label!=null?actor.label.font:Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");videoStatus.fontSize=48;videoStatus.characterSize=.018f;videoStatus.anchor=TextAnchor.MiddleCenter;videoStatus.alignment=TextAlignment.Center;videoStatus.color=FrameColor;
+   videoStatus.GetComponent<Renderer>().sharedMaterial=actor.label!=null?actor.label.GetComponent<Renderer>().sharedMaterial:videoStatus.font.material;
+   statusPanel.gameObject.SetActive(false);videoStatus.gameObject.SetActive(false);
    StareFloorReflection.Mark(panel,actor.root.gameObject.layer);
    panel.gameObject.SetActive(false);ApplyPose();
   }
-  public void Present(Texture texture)
+  public void Present(Texture texture){PresentState(texture,texture!=null,texture!=null);}
+  public void PresentVideo(Texture texture,bool current){PresentState(texture,true,current&&texture!=null);}
+  void PresentState(Texture texture,bool active,bool current)
   {
-   bool active=texture!=null;
-   if(display!=null)display.mainTexture=texture;
-   if(panel!=null)panel.gameObject.SetActive(active);
+   bool changed=active!=visible||current!=fresh;shownTexture=texture;
+   if(display!=null&&display.mainTexture!=texture)display.mainTexture=texture;
+   if(panel!=null&&panel.gameObject.activeSelf!=active)panel.gameObject.SetActive(active);
    if(active!=visible)
    {foreach(var item in hidden)if(item.renderer!=null)item.renderer.enabled=active?false:item.enabled;visible=active;}
+   fresh=current;
+   if(changed&&frame!=null)frame.color=active&&!current?PausedColor:FrameColor;
+   if(changed&&statusPanel!=null)statusPanel.gameObject.SetActive(active&&!current);
+   if(videoStatus!=null){if(changed)videoStatus.gameObject.SetActive(active&&!current);string label=texture!=null?"VIDEO PAUSED":"CONNECTING";if(videoStatus.text!=label)videoStatus.text=label;}
    if(active)ApplyPose();
   }
   void ApplyPose()

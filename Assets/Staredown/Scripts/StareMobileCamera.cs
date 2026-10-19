@@ -18,13 +18,16 @@ namespace Staredown
         public float Right => blink.Right;
         public float Yaw { get; private set; }
         public float Pitch { get; private set; }
-        public bool Valid => Running && blink.Valid;
-        public bool Ready => Running && blink.Ready;
+        public bool Valid => Running && !historyLost && blink.Valid;
+        public bool Ready => Running && !historyLost && blink.Ready;
         public bool Running { get; private set; }
+        public bool CameraEnabledIntent { get; private set; }
+        public bool Recovering => CameraEnabledIntent && (paused || restartPending || permission != null);
+        public string DiagnosticsSummary { get; private set; } = "Eye capture not started";
         public int BlinkSequence => blink.BlinkSequence;
         public float CalibrationProgress => Running ? blink.CalibrationProgress : 0;
         public int CalibrationPercent => Mathf.RoundToInt(CalibrationProgress*100);
-        public string Status => !Running ? status : !Valid ? TrackingGuidance :
+        public string Status => Recovering ? "CAMERA RESUMING / HOLD STILL" : !Running ? status : historyLost ? "TRACKING HISTORY LOST / RECALIBRATE" : !Valid ? TrackingGuidance :
             !Ready ? "KEEP EYES OPEN / "+CalibrationPercent+"%" : "READY / EYES TRACKED";
         string TrackingGuidance => trackingReason == 2 ? "ONLY ONE FACE IN VIEW" :
             trackingReason == 3 ? "SHOW BOTH EYES IN GOOD LIGHT" : trackingReason == 4 ? "FACE THE FRONT CAMERA" :
@@ -40,6 +43,12 @@ namespace Staredown
             public int reason;
             public float left, right, yaw, pitch;
         }
+        [Serializable] sealed class SampleBatch
+        {
+            public Sample[] samples;
+            public long overflow,dropped,nativeSamples,encodedFrames,encodeSkips,captureGaps;
+            public float nativeFPS,encodeMs; public int formatFPS;
+        }
         readonly StareMobileBlink blink = new StareMobileBlink();
         string status = "TAP ENABLE CAMERA";
         WebCamTexture webcam;
@@ -52,6 +61,14 @@ namespace Staredown
         Coroutine permission;
         bool testCapture;
         int generation;
+        bool paused,restartPending,historyLost,contestActive;
+        float restartAt,diagnosticsAt,cadenceAt,consumedFPS,videoFPS;
+        int consumedWindow,videoWindow; long consumedSamples;
+        double lastCaptureTimestamp;
+        SampleBatch nativeDiagnostics;
+#if UNITY_EDITOR
+        bool resumeTestCapture;
+#endif
 #if UNITY_ANDROID && STARE_MOBILE && !UNITY_EDITOR
         AndroidJavaClass detector;
 #endif
@@ -60,7 +77,9 @@ namespace Staredown
         [DllImport("__Internal")][return: MarshalAs(UnmanagedType.I1)] static extern bool StareMobileIOSStart();
         [DllImport("__Internal")] static extern void StareMobileIOSStop();
         [DllImport("__Internal")] static extern void StareMobileIOSRefreshOrientation();
-        [DllImport("__Internal")] static extern IntPtr StareMobileIOSPollAfter(long sequence);
+        [DllImport("__Internal")] static extern IntPtr StareMobileIOSDrainSamples();
+        [DllImport("__Internal")] static extern void StareMobileIOSResetSamples();
+        [DllImport("__Internal")] static extern double StareMobileIOSLatestCaptureTimestamp();
         [DllImport("__Internal")] static extern int StareMobileIOSThermalLevel();
         [DllImport("__Internal")] static extern IntPtr StareMobileIOSCopyFrameAfter(long previousSequence, out long sequence, out int length);
         [DllImport("__Internal")] static extern void StareMobileIOSFree(IntPtr pointer);
@@ -78,13 +97,22 @@ namespace Staredown
         }
         public void StartCamera()
         {
-            if (Running || permission != null) return;
+            CameraEnabledIntent = true;
+            if (paused) { restartPending = true; return; }
+            if (Running) { restartPending = false; return; }
+            if (permission != null) return;
+            restartPending = false;
             int token = ++generation;
             permission = StartCoroutine(RequestCamera(token));
         }
         IEnumerator RequestCamera(int token)
         {
             status = "ALLOW FRONT CAMERA TO PLAY";
+            // StartCoroutine may otherwise complete synchronously when the OS
+            // permission is already granted, then overwrite permission=null
+            // with its returned handle and leave Recovering stuck forever.
+            yield return null;
+            if (generation != token || !CameraEnabledIntent) yield break;
 #if UNITY_ANDROID && STARE_MOBILE && !UNITY_EDITOR
             if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera))
             {
@@ -98,54 +126,77 @@ namespace Staredown
             }
             if (generation != token) yield break;
             if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera))
-            { status = "CAMERA OFF / ENABLE IN PHONE SETTINGS"; permission = null; yield break; }
+            { StartFailed("CAMERA OFF / ENABLE IN PHONE SETTINGS"); yield break; }
 #elif UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
             if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
                 yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
             if (generation != token) yield break;
             if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
-            { status = "CAMERA OFF / ENABLE IN PHONE SETTINGS"; permission = null; yield break; }
+            { StartFailed("CAMERA OFF / ENABLE IN PHONE SETTINGS"); yield break; }
 #else
             yield return null;
 #endif
             if (generation != token) yield break;
             permission = null;
-            BeginCamera();
+            if (!CameraEnabledIntent) yield break;
+            if (paused) { restartPending = true; yield break; }
+            restartPending = false; BeginCamera();
         }
         void BeginCamera()
         {
             Calibrate(); testCapture = false;
+#if UNITY_EDITOR
+            if (resumeTestCapture) { resumeTestCapture = false; testCapture = Running = true; status = "EDITOR CAMERA FIXTURE"; return; }
+#endif
 #if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
-            if (!StareMobileIOSSupported()) { status = "FACE TRACKING IS NOT SUPPORTED ON THIS PHONE"; return; }
+            if (!StareMobileIOSSupported()) { StartFailed("FACE TRACKING IS NOT SUPPORTED ON THIS PHONE"); return; }
             Running = StareMobileIOSStart();
-            status = Running ? "FINDING YOUR FACE" : "CAMERA COULD NOT START";
+            if (!Running) { StartFailed("CAMERA COULD NOT START"); return; }
+            status = "FINDING YOUR FACE";
 #elif UNITY_ANDROID && STARE_MOBILE && !UNITY_EDITOR
             try
             {
                 detector = new AndroidJavaClass("com.antony.staredown.mobile.StaredownFaceDetector");
-                if (!detector.CallStatic<bool>("start")) { StopNative(); status = "FACE TRACKER COULD NOT START"; return; }
+                if (!detector.CallStatic<bool>("start")) { StopNative(); StartFailed("FACE TRACKER COULD NOT START"); return; }
                 string device = null;
                 foreach (var candidate in WebCamTexture.devices) if (candidate.isFrontFacing) { device = candidate.name; break; }
-                if (device == null) { status = "NO FRONT CAMERA FOUND"; StopNative(); return; }
+                if (device == null) { StopNative(); StartFailed("NO FRONT CAMERA FOUND"); return; }
                 webcam = new WebCamTexture(device, 640, 480, 30);
                 webcam.Play(); Running = true; status = "FINDING YOUR FACE";
             }
             catch (Exception error) { Debug.LogWarning("[STARE MOBILE CAMERA] " + error.Message); StopCamera(); status = "CAMERA COULD NOT START / TRY AGAIN"; }
 #else
-            status = "FACE CAMERA TRACKING REQUIRES A PHONE";
+            StartFailed("FACE CAMERA TRACKING REQUIRES A PHONE");
 #endif
             nextAnalysis = nextFrame = 0;
             sampleSequence = nativeFrameSequence = 0;
         }
+        void StartFailed(string message)
+        { CameraEnabledIntent = Running = restartPending = false; permission = null; status = message; }
         public void Calibrate()
         {
-            blink.Reset(); Yaw = Pitch = 0; trackingReason = 1;
+            blink.Reset(); historyLost = false; sampleSequence = 0; Yaw = Pitch = 0; trackingReason = 1;
+#if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
+            if (Running) StareMobileIOSResetSamples();
+#endif
         }
         public void StopCamera()
         {
-            generation++;
-            if (permission != null) { StopCoroutine(permission); permission = null; }
+            CameraEnabledIntent = restartPending = false;
+#if UNITY_EDITOR
+            resumeTestCapture = false;
+#endif
+            StopCapture(true);
+        }
+        void StopCapture(bool cancelPermission)
+        {
+            if (cancelPermission)
+            {
+                generation++;
+                if (permission != null) { StopCoroutine(permission); permission = null; }
+            }
             Running = testCapture = false;
+            contestActive = false;
             if (webcam != null) { webcam.Stop(); Destroy(webcam); webcam = null; }
             StopNative(); Calibrate();
             if (preview != null) { Destroy(preview); preview = null; }
@@ -162,6 +213,8 @@ namespace Staredown
         }
         void Update()
         {
+            if (restartPending && !paused && permission == null && Time.unscaledTime >= restartAt && CameraEnabledIntent) StartCamera();
+            UpdateDiagnostics();
             if (Time.unscaledTime >= nextThermal)
             {
                 nextThermal = Time.unscaledTime + 3;
@@ -181,16 +234,52 @@ namespace Staredown
             }
             blink.Tick(Time.realtimeSinceStartupAsDouble);
         }
-        void AcceptSample(Sample sample)
+        public void SetContestActive(bool active)
+        {
+            if (active && !contestActive)
+            {
+                double cutoff = lastCaptureTimestamp;
+#if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
+                if (Running) cutoff = StareMobileIOSLatestCaptureTimestamp();
+#endif
+                blink.IgnoreBlinksThrough(cutoff);
+            }
+            else if (!active && contestActive) blink.IgnoreBlinksThrough(double.NegativeInfinity);
+            contestActive = active;
+        }
+        void AcceptSample(Sample sample, bool replay = false)
         {
             if (sample == null || sample.sequence <= sampleSequence) return;
             sampleSequence = sample.sequence;
-            bool fresh = sample.age <= StareMobileBlink.StaleAfter && sample.age >= 0;
+            bool ageValid = !double.IsNaN(sample.age) && !double.IsInfinity(sample.age) && sample.age >= 0;
+            bool fresh = ageValid && sample.age <= StareMobileBlink.StaleAfter;
             bool facing = Mathf.Abs(sample.yaw) <= 18 && Mathf.Abs(sample.pitch) <= 25;
-            bool valid = sample.valid && fresh && facing;
+            bool valid = !historyLost && sample.valid && (replay ? ageValid : fresh) && facing;
             trackingReason = !fresh ? 6 : !facing ? 4 : sample.reason;
-            blink.Sample(sample.left, sample.right, valid, sample.timestamp, Time.realtimeSinceStartupAsDouble);
+            blink.Sample(sample.left, sample.right, valid, sample.timestamp, Time.realtimeSinceStartupAsDouble - (ageValid ? sample.age : 0));
+            lastCaptureTimestamp = sample.timestamp; consumedSamples++; consumedWindow++;
             Yaw = valid ? sample.yaw : 0; Pitch = valid ? sample.pitch : 0;
+        }
+        void AcceptBatch(SampleBatch batch)
+        {
+            if (batch == null || batch.samples == null || batch.samples.Length > 256) return;
+            nativeDiagnostics = batch;
+            if (batch.overflow > 0) { blink.Reset(); historyLost = true; }
+            foreach (var sample in batch.samples) AcceptSample(sample,true);
+            // Replay old closures, but only the newest capture can establish
+            // current tracking. A stale batch never makes a paused camera valid.
+            blink.Tick(Time.realtimeSinceStartupAsDouble);
+        }
+        void UpdateDiagnostics()
+        {
+            float now = Time.unscaledTime;
+            if (now-cadenceAt >= 1) { float span=now-cadenceAt; consumedFPS=consumedWindow/span;videoFPS=videoWindow/span;consumedWindow=videoWindow=0;cadenceAt=now; }
+            if (now < diagnosticsAt) return; diagnosticsAt = now+.5f;
+            var d=nativeDiagnostics;
+            DiagnosticsSummary="Eye capture "+(d!=null?d.nativeFPS.ToString("0"):"—")+" Hz / read "+consumedFPS.ToString("0")+" Hz"+
+                "\nRequested "+(d!=null?d.formatFPS.ToString():"—")+" Hz / video "+videoFPS.ToString("0.0")+" FPS / blinks "+BlinkSequence+
+                "\nSamples "+consumedSamples+" / gaps "+(d!=null?d.captureGaps:blink.CaptureGaps)+" / lost "+(d!=null?d.dropped:0)+
+                (d!=null?" / encode "+d.encodeMs.ToString("0.0")+" ms / busy skips "+d.encodeSkips:"");
         }
 #if UNITY_ANDROID && STARE_MOBILE && !UNITY_EDITOR
         void UpdateAndroid()
@@ -241,10 +330,10 @@ namespace Staredown
 #if UNITY_IOS && STARE_MOBILE && !UNITY_EDITOR
         void UpdateIOS()
         {
-            IntPtr pointer = StareMobileIOSPollAfter(sampleSequence);
+            IntPtr pointer = StareMobileIOSDrainSamples();
             if (pointer != IntPtr.Zero)
             {
-                try { AcceptSample(JsonUtility.FromJson<Sample>(Marshal.PtrToStringAnsi(pointer))); }
+                try { AcceptBatch(JsonUtility.FromJson<SampleBatch>(Marshal.PtrToStringAnsi(pointer))); }
                 finally { StareMobileIOSFree(pointer); }
             }
             if (Time.unscaledTime < nextFrame) return;
@@ -302,9 +391,13 @@ namespace Staredown
             // away must keep the live head visible, including the empty view.
             if (!Running || bytes == null || bytes.Length < 4 || bytes.Length > MaxFrameBytes || bytes[0] != 255 || bytes[1] != 216) return;
             FrameReady?.Invoke(bytes);
+            videoWindow++;
         }
 #if UNITY_EDITOR
-        public void BeginTestCapture() { StopCamera(); testCapture = Running = true; status = "EDITOR CAMERA FIXTURE"; sampleSequence = 0; }
+        public void BeginTestCapture() { StopCamera(); CameraEnabledIntent = true; testCapture = Running = true; status = "EDITOR CAMERA FIXTURE"; sampleSequence = 0; }
+        public void SubmitTestBatchJson(string json) { if(testCapture) AcceptBatch(JsonUtility.FromJson<SampleBatch>(json)); }
+        public void SetTestNativeCaptureTimestamp(double timestamp) { lastCaptureTimestamp=timestamp; }
+        public void TestApplicationPause(bool value) { OnApplicationPause(value); }
         public void SubmitTestSample(float left, float right, bool valid, double timestamp, long sequence, float yaw = 0, float pitch = 0, int reason = 0, double age = 0)
         {
             if (testCapture && Running) AcceptSample(new Sample { left = left, right = right, valid = valid, timestamp = timestamp, sequence = sequence, yaw = yaw, pitch = pitch, reason = reason, age = age });
@@ -315,6 +408,18 @@ namespace Staredown
 #endif
         void OnDisable() { StopCamera(); }
         void OnDestroy() { StopCamera(); }
-        void OnApplicationPause(bool paused) { if (paused) { StopCamera(); status = "CAMERA PAUSED / TAP ENABLE CAMERA"; } }
+        void OnApplicationPause(bool value)
+        {
+            paused = value;
+            if (value)
+            {
+#if UNITY_EDITOR
+                resumeTestCapture = testCapture;
+#endif
+                if (CameraEnabledIntent) restartPending = true;
+                StopCapture(false); status = "CAMERA PAUSED";
+            }
+            else if (CameraEnabledIntent) { restartPending = true; restartAt = Time.unscaledTime+.2f; }
+        }
     }
 }

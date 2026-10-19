@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "created_local_date": "2026-10-19",
+  "source_project": "/Users/Antony/Documents/Codex/MetaVRStarter",
+  "baseline_checkpoint": "65520c3",
+  "source_state": "Reliability working changes after checkpoint; not a committed or device-measured performance result.",
+  "measurement_status": {
+    "kind": "source-derived theoretical application-message capacity only",
+    "physical_iphone_performance_measured": false,
+    "device_audit": "The known iPhone 12 Pro was unavailable/offline during the read-only device audit. No sustained FPS, capture cadence, thermal, GPU or room fanout measurements were obtained."
+  },
+  "rate_distinction": {
+    "native_eye_capture": {
+      "source": "Assets/Plugins/iOS/StaredownMobileCamera.mm; Assets/Staredown/Scripts/StareMobileCamera.cs",
+      "requested_format_policy": "Prefer advertised 60 Hz at the fewest pixels, else advertised 30 Hz. The selected ARKit format is not proof of achieved native callback cadence.",
+      "history_capacity_samples": 256,
+      "processing": "Native face samples enter a bounded ring. Managed Update drains all queued samples, rather than sampling only the latest value. Overflow is explicit and invalidates readiness. A capture timestamp barrier prevents pre-Go blinks from becoming post-Go losses.",
+      "jpeg_independence": "JPEG work is dispatched to a separate serial encode queue with one busy job; busy decorative frames are skipped. Native face-history processing is separate from social-video publication.",
+      "actual_diagnostics": "nativeFPS / requested formatFPS / consumed sample Hz / dropped samples / capture gaps / encode milliseconds / encode busy skips"
+    },
+    "main_game_render": {
+      "source": "Assets/Staredown/Scripts/StareMobileSession.cs; Assets/Staredown/Scripts/StareArenaMirror.cs",
+      "phone_target_fps_normal": 30,
+      "phone_target_fps_serious_thermal": 24,
+      "phone_max_render_long_edge_pixels": 1280,
+      "main_view_msaa": 2,
+      "phone_mirror_target_hz_normal": 6,
+      "phone_mirror_target_hz_under_pressure": 3,
+      "quest_mirror_target_hz_normal": 12,
+      "quest_mirror_target_hz_under_pressure": 8,
+      "meaning": "Target cadence is not measured FPS. Rendering and transport Tick still share Unity frame time; native sample history preserves intervening eye samples. Offscreen rendering still consumes GPU budget."
+    },
+    "social_video": {
+      "source": "Assets/Staredown/Scripts/StareMobileCamera.cs; Assets/Staredown/Scripts/StareCameraStream.cs; Assets/Staredown/Scripts/StareRelayNetwork.cs",
+      "normal_publication_cap_fps": 6,
+      "serious_thermal_native_thumbnail_target_fps": 4,
+      "canonical_thumbnail_pixels": [
+        160,
+        160
+      ],
+      "accepted_jpeg_max_dimension_pixels": 256,
+      "meaning": "Decorative room-camera JPEG thumbnails. This received video FPS does not define native blink sampling rate or prove main game FPS.",
+      "stale_after_seconds": 1.5,
+      "stale_behavior": "Consent-enabled camera head remains stable with cached frozen image and VIDEO PAUSED indicator. HasLiveFeed means fresh. Explicit camera off/disconnect removes it immediately.",
+      "local_preview_optimization": "Optional canonical Texture2D preview is borrowed by Publish, avoiding a second local JPEG decode. Its lifetime remains owned by the camera."
+    }
+  },
+  "caps_and_assumptions": {
+    "max_contestants": 16,
+    "max_remote_peers_per_host": 15,
+    "max_video_origins_queued_per_peer": 16,
+    "normal_camera_frames_per_second_per_origin": 6,
+    "max_jpeg_bytes": 5000,
+    "max_base64_chars": 6668,
+    "max_full_json_bytes": 8192,
+    "per_peer_camera_flush_cap_per_tick": 2,
+    "host_tick_assumption": "Transport.Tick once per main game Update. Example Quest host is assumed to achieve 72 FPS; phone host examples assume 30 or 24 FPS. These are capacity scenarios, not observed device rates.",
+    "flush_priority": "Reliable gameplay queue/input/snapshot is flushed first. Any reliable backlog blocks camera flushing for that peer on that tick.",
+    "queue_policy": "Latest frame coalesces per origin; one round-robin queue slot per origin. Replaced frames do not accumulate into a latency backlog.",
+    "delivery": "Fragmentation plus UnreliableSequenced pipeline; dropped fragments can discard an entire JSON thumbnail.",
+    "echo": "Compatible host Broadcast includes the origin sender. Owner sequence validation rejects redundant display/decode, but wire delivery and serialization still occur.",
+    "size_interpretation": "8192 bytes is a conservative allowed JSON envelope bound. A max-5000-byte JPEG expands to 6668 Base64 characters plus serialized message fields; actual complete messages may be smaller than the envelope. This report does not claim every frame reaches 8192 bytes.",
+    "exclusions": [
+      "UDP/IP/DTLS/Unity Transport/Relay headers and fragmentation overhead",
+      "Gameplay and voice traffic",
+      "Real link capacity, contention, packet loss and transport send failures",
+      "JPEG quality and image-content variability",
+      "CPU JSON/Base64 and image-decode cost; GPU texture-upload/render cost",
+      "Actual native, Unity, thermal or Relay achieved throughput"
+    ]
+  },
+  "formulas": {
+    "per_source_json_envelope_mbps": "frames_per_second * max_full_json_bytes * 8 / 1_000_000",
+    "desired_host_egress_mbps": "camera_origins * remote_peers * per_source_json_envelope_mbps",
+    "per_peer_flush_ceiling_messages_per_second": "2 * achieved_host_game_fps",
+    "fair_share_per_origin_fps_upper_bound": "min(6, per_peer_flush_ceiling_messages_per_second / camera_origins)",
+    "flush_limited_host_egress_envelope_mbps": "min(camera_origins * 6, 2 * achieved_host_game_fps) * remote_peers * 8192 * 8 / 1_000_000"
+  },
+  "per_camera_origin": {
+    "max_jpeg_payload_mbps_at_6_fps": 0.24,
+    "max_json_envelope_mbps_at_6_fps": 0.393216
+  },
+  "normal_6_fps_source_scenarios": [
+    {
+      "name": "Quest host, 15 phone cameras, 15 remote peers",
+      "assumed_host_game_fps": 72,
+      "camera_origins": 15,
+      "remote_peers": 15,
+      "desired_camera_messages_per_second_per_peer": 90,
+      "flush_message_ceiling_per_second_per_peer": 144,
+      "fair_share_video_fps_upper_bound_per_origin": 6,
+      "host_ingress_json_envelope_mbps": 5.89824,
+      "desired_host_egress_json_envelope_mbps": 88.4736,
+      "flush_limited_host_egress_json_envelope_mbps": 88.4736,
+      "note": "Upper bound before gameplay priority, scheduling, send failures, fragment loss, CPU/GPU work and service/network limits. Game FPS is an assumption, not an observation."
+    },
+    {
+      "name": "Phone host, 16 phone cameras, 15 remote peers",
+      "assumed_host_game_fps": 30,
+      "camera_origins": 16,
+      "remote_peers": 15,
+      "desired_camera_messages_per_second_per_peer": 96,
+      "flush_message_ceiling_per_second_per_peer": 60,
+      "fair_share_video_fps_upper_bound_per_origin": 3.75,
+      "host_ingress_json_envelope_mbps": 5.89824,
+      "desired_host_egress_json_envelope_mbps": 94.37184,
+      "flush_limited_host_egress_json_envelope_mbps": 58.9824,
+      "note": "Upper bound before gameplay priority, scheduling, send failures, fragment loss, CPU/GPU work and service/network limits. Game FPS is an assumption, not an observation."
+    },
+    {
+      "name": "Phone host under serious thermal pressure",
+      "assumed_host_game_fps": 24,
+      "camera_origins": 16,
+      "remote_peers": 15,
+      "desired_camera_messages_per_second_per_peer": 96,
+      "flush_message_ceiling_per_second_per_peer": 48,
+      "fair_share_video_fps_upper_bound_per_origin": 3.0,
+      "host_ingress_json_envelope_mbps": 5.89824,
+      "desired_host_egress_json_envelope_mbps": 94.37184,
+      "flush_limited_host_egress_json_envelope_mbps": 47.18592,
+      "note": "Upper bound before gameplay priority, scheduling, send failures, fragment loss, CPU/GPU work and service/network limits. Game FPS is an assumption, not an observation."
+    }
+  ],
+  "thermal_scenario_caveat": "The 24 FPS host row intentionally holds all origins at 6 FPS to isolate the host scheduling limit. If all 16 origins are thermally limited to 4 FPS, desired per-peer rate is 64 messages/s, still above the 48 messages/s host flush ceiling; the fair-share upper bound remains 3 FPS/origin. The host thermal state does not imply every remote origin is thermal-limited.",
+  "scaling_assessment": {
+    "phone_16_camera_fanout": "16 origins at 6 FPS require 96 camera messages/s per recipient; a 30 FPS phone host can flush at most 60. Even an ideal fair share is 3.75 FPS/origin before other limits. Compatible self-echo consumes part of that budget.",
+    "cpu_work_example": "A Quest host receiving 15 phone streams at 6 FPS may accept/decode up to 90 remote JPEG frames/s. Each recipient may decode the other 15 origins up to 90 times/s if transport permits. This is workload count, not measured CPU cost.",
+    "fluid_video_requirement": "Increasing the JSON/JPEG publication number alone is not a sound route to fluid 16-phone video: fanout scales as origins times peers and each frame repeats Base64/JSON, JPEG decode and GPU upload. Fluid video at this scale needs a separately designed media path with hardware codecs, congestion/adaptation, selective subscriptions and appropriate server/media fanout, such as a WebRTC-based design.",
+    "implemented_scope": "Current changes improve blink-history correctness, reduce local decode work, limit phone mirror cost and expose honest frozen/stale state. A hardware-codec/media-transport replacement is not implemented or claimed."
+  },
+  "available_diagnostics": [
+    "Session.PerformanceSummary: measured Unity game FPS plus native camera and camera-head summaries",
+    "StareMobileCamera.DiagnosticsSummary: native capture/read cadence, video FPS, blink sequence, gaps/loss and encode timing",
+    "StareCameraStream.DiagnosticsSummary / FeedFramesPerSecond / FeedAge / FeedIsStale: actual accepted per-feed video cadence and freshness",
+    "StareCameraStream.DecodedFrames / ReusedPreviewFrames: decode work versus borrowed preview reuse",
+    "Relay TransportDiagnostics: camera TX/RX, replaced/discarded, send error and reliable packet counts",
+    "On connected supported iPhone: xctrace Game Performance / Metal System Trace / Time Profiler / Allocations / Network templates for device validation"
+  ]
+}

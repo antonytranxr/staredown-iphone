@@ -155,6 +155,7 @@ public static class StareMobileUiChecks
             face.BeginTestCapture();captureStarted=true;face.SubmitTestPixels(PreviewPixels(),StareMobileCamera.FrameSize,StareMobileCamera.FrameSize,0,false);
             var canonical=face.Preview as Texture2D;
             check(canonical!=null&&canonical.GetPixel(12,80).g>canonical.GetPixel(12,80).b&&canonical.GetPixel(148,80).b>canonical.GetPixel(148,80).g,"camera fixture pixels are canonical and unmirrored");
+            check(face.CameraEnabledIntent,"camera opt-in is retained by provider fixture");
             var sizes=new[]{new Vector2Int(900,1600),new Vector2Int(1600,900)};
             var insets=new[]{new Rect(0,50,900,1460),new Rect(65,32,1470,868)};
             for(int index=0;index<sizes.Length;index++)
@@ -187,6 +188,10 @@ public static class StareMobileUiChecks
                 Inside(hud.CameraPanelRect,safe,camera,check,prefix+" camera panel");
                 check(!ScreenRect(hud.PlayerNameInput.GetComponent<RectTransform>(),camera).Overlaps(ScreenRect(hud.CameraPanelRect,camera)),"name entry does not overlap camera card");
                 check(hud.CameraPreview.uvRect==new Rect(1,0,-1,1)&&hud.CameraPreview.rectTransform.localScale==Vector3.one&&Quaternion.Angle(hud.CameraPreview.rectTransform.localRotation,Quaternion.identity)<.01f,"local preview applies exactly one horizontal UV mirror without transform rotation/flip");
+                check(hud.CameraSetupButton.GetComponentInChildren<Text>().text=="Camera settings","enabled home camera is not another enable/off step");
+                bool runningBeforeSettings=face.Running;Tap(hud.CameraSetupButton,raycaster,camera);Tick(hud);
+                check(hud.SettingsVisible&&face.Running==runningBeforeSettings&&face.CameraEnabledIntent,"home camera button opens settings without toggling capture");
+                Tap(hud.SettingsButton,raycaster,camera);Tick(hud);
                 var home=Capture(camera,target,Path.Combine(outputFolder,prefix+"-home.png"));
                 try
                 {
@@ -223,6 +228,18 @@ public static class StareMobileUiChecks
                 Tap(hud.PracticeButton,raycaster,camera);Tick(session);Tick(hud);Canvas.ForceUpdateCanvases();
                 check(session.Connected&&session.Hosting&&session.HasPlayerName&&session.PlayerName=="UI Pilot"&&!hud.HomeVisible&&!hud.NameEditorVisible,"Practice saves visible name and enters directly without duplicate confirmation");
                 check(session.State.fighters.Any(f=>f.id==session.LocalId&&f.name=="UI Pilot")&&session.State.phase==(int)MatchPhase.Lobby,"saved name reaches the practice lobby roster");
+                check(face.Running&&face.CameraEnabledIntent&&ReferenceEquals(canonical,face.Preview),"entering practice preserves camera opt-in, capture and preview");
+                check(hud.CollapsedPreview&&!hud.PreviewExpanded&&hud.RoomToolbarRect.rect.height<=70&&hud.CameraPanelRect.rect.height<=160,"connected HUD uses compact top strip and collapsed preview");
+                check(!hud.CaptionPanelRect.gameObject.activeInHierarchy,"calibration does not create a permanent arena instruction panel");
+                Canvas.ForceUpdateCanvases();camera.Render();
+                var playPoint=RectTransformUtility.WorldToScreenPoint(camera,hud.SafeAreaRect.TransformPoint(hud.SafeAreaRect.rect.center));
+                var playHit=new PointerEventData(EventSystem.current){position=playPoint};var playHits=new List<RaycastResult>();raycaster.Raycast(playHit,playHits);
+                check(playHits.Count>0&&playHits[0].gameObject==hud.LookControl.gameObject,"arena center remains available for swipe look");
+                Tap(hud.CameraPreviewButton,raycaster,camera);Tick(hud);check(hud.PreviewExpanded&&!hud.CollapsedPreview&&face.Running,"preview expands without interrupting capture");
+                Tap(hud.CameraPreviewButton,raycaster,camera);Tick(hud);check(hud.CollapsedPreview&&!hud.PreviewExpanded&&face.Running,"preview collapses without interrupting capture");
+                Tap(hud.SettingsButton,raycaster,camera);Tick(hud);check(hud.TrackingDiagnostics==session.PerformanceSummary,"settings uses measured game/camera/video diagnostics");
+                check(hud.CameraPowerButton.GetComponentInChildren<Text>().text=="Camera off","explicit camera-off action lives in Settings");
+                Tap(hud.SettingsButton,raycaster,camera);Tick(hud);
                 check(!face.Ready&&!hud.StartButton.interactable,"uncalibrated camera cannot use Start");
                 session.StartMatch();Tick(session);Tick(hud);check(session.State.phase==(int)MatchPhase.Lobby,"session rejects starting before eye calibration");
                 Inside(hud.SettingsButton.GetComponent<RectTransform>(),safe,camera,check,prefix+" lobby Settings button");
