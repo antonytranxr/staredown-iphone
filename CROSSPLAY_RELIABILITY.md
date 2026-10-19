@@ -15,3 +15,7 @@ Room discovery is now `staredown-crossplatform-v8`. All participants must update
 ## Verification
 
 Automated results and physical-device limits are recorded in the release record and iPhone VALIDATION.md. In particular, synthetic camera samples do not establish real ARKit blink recall; four-person audibility across all twelve speaker/listener paths still requires the testers. A local Unity export is not a TestFlight upload.
+
+## Quest build and install
+
+The Android build succeeded in 4m11s. Unity counted twelve editor MCP WebSocket reconnection errors after the separate phone editor shut down that service; all twelve report error entries are exactly that editor bridge failure, not compiler, linker or player failures. The bridge is restored. The report retains those entries rather than relabeling it zero-error. APK package, OpenXR/Meta libraries and phone/Operator exclusions pass. Installed Quest 1.18.3 (37) matches the APK SHA-256. Startup detected real eye-tracking mode and reported 71.7/71.8 FPS before losing focus; no fatal or managed exception matched the scanned startup log. This is not sustained multiplayer or four-person audibility verification. See Validation/.

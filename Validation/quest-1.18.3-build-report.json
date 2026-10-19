@@ -1,0 +1,20 @@
+{
+  "result": "Succeeded",
+  "errors": [
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)",
+    "<b><color=#cc3333>MCP-FOR-UNITY</color></b>: [WebSocket] Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid. (Detail: Unable to connect to the remote server)"
+  ],
+  "reportedErrors": 12,
+  "warnings": 9,
+  "output": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/outputs/Staredown-Quest-2026-10-19-v1.18.3.apk"
+}

@@ -1,0 +1,27 @@
+{
+  "pid": 24939,
+  "signals": [
+    "10-19 15:59:14.668 24939 24939 I Unity   : onResume",
+    "10-19 15:59:15.168 24939 24974 I Unity   : [OVRManager] OnApplicationPause(true)",
+    "10-19 15:59:15.227 24939 24974 I Unity   : [OVRManager] OnApplicationPause(false)",
+    "10-19 15:59:15.248 24939 24974 I Unity   : [STARE INPUT MODE] detected=EyeTracking mode=real eyes",
+    "10-19 15:59:17.892 24939 24974 I Unity   : [STARE FX] ready: pooled sparks, eye warning, elimination rings, victory and feedback audio",
+    "10-19 15:59:17.896 24939 24974 I Unity   : [STARE DISTRACTIONS] pooled bees ready / stages 3, 9, 18 sec / maximum 6 visible",
+    "10-19 15:59:18.117 24939 24974 I Unity   : [STARE PERF] appFPS=0.7 avgMs=1512.6 peakMs=2860.0 music=True handL=False handR=False input=CONTROLLERS 0 / HANDS 0 / WAITING FOR HANDS OR CONTROLLERS",
+    "10-19 15:59:18.175 24939 24974 I OpenXR_SessionImpl: PostSessionStateChange:[pid: 24939] XR_SESSION_STATE_VISIBLE -> XR_SESSION_STATE_FOCUSED",
+    "10-19 15:59:18.179 24939 24974 I Unity   : [XR] [484712626672] [15:59:18.179][Info   ] OpenXRSession::HandleSessionStateChangedEvent: state XR_SESSION_STATE_VISIBLE->XR_SESSION_STATE_FOCUSED session=82 time=269181406624011",
+    "10-19 15:59:18.186 24939 24974 I Unity   : [XR] [484712626672] [15:59:18.186][Info   ] XrEventDataSessionStateChanged: XR_SESSION_STATE_VISIBLE->XR_SESSION_STATE_FOCUSED",
+    "10-19 15:59:18.302 24939 24974 I Unity   : [STARE TUTORIAL] clean narrated tutorial ready / 51.67s / audio tracks=1",
+    "10-19 15:59:23.154 24939 24974 I Unity   : [STARE PERF] appFPS=71.7 avgMs=14.0 peakMs=15.6 music=True handL=False handR=False input=CONTROLLERS 0 / HANDS 0 / WAITING FOR HANDS OR CONTROLLERS",
+    "10-19 15:59:28.184 24939 24974 I Unity   : [STARE PERF] appFPS=71.8 avgMs=13.9 peakMs=14.9 music=True handL=False handR=False input=CONTROLLERS 0 / HANDS 0 / WAITING FOR HANDS OR CONTROLLERS",
+    "10-19 15:59:28.760 24939 24939 I Unity   : onPause",
+    "10-19 15:59:28.765 24939 24974 I OpenXR_SessionImpl: PostSessionStateChange:[pid: 24939] XR_SESSION_STATE_FOCUSED -> XR_SESSION_STATE_VISIBLE",
+    "10-19 15:59:28.788 24939 24974 I Unity   : [XR] [484712626672] [15:59:28.788][Info   ] OpenXRSession::HandleSessionStateChangedEvent: state XR_SESSION_STATE_FOCUSED->XR_SESSION_STATE_VISIBLE session=82 time=269191997537149",
+    "10-19 15:59:28.860 24939 24974 I Unity   : [OVRManager] OnApplicationPause(true)"
+  ],
+  "errors": [],
+  "characters": 397817,
+  "version": "1.18.3",
+  "code": 37,
+  "limits": "Startup only. Two ~72 FPS samples before focus loss; sustained multiplayer, eye accuracy and four-person audibility are unverified."
+}

@@ -1,0 +1,9 @@
+{
+  "package": "package: name='com.antony.staredown' versionCode='37' versionName='1.18.3' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'",
+  "bytes": 258853599,
+  "sha256": "66f0e09c8b2753e5d25ecf6d92c9d6b3d8b16c15d03c65188f96ff64595f9a17",
+  "quest_headtracking": true,
+  "openxr_native": true,
+  "meta_xr_native": true,
+  "phone_camera_bridge": false
+}
