@@ -49,7 +49,7 @@ public static class StareRoomPhoneChecks
   var countdown=ReadyRoom(2,0);
   Check(countdown.Find(0).phoneTrackingRequired&&!countdown.Find(1).phoneTrackingRequired,"camera requirement is latched when the round starts");
   float countdownBefore=countdown.Remaining;Step(countdown,.4f,new[]{0});
-  Check(countdown.TrackingPaused&&Mathf.Abs(countdown.Remaining-countdownBefore)<.001f,"missing face pauses pre-Go countdown");
+  Check(!countdown.TrackingPaused&&countdown.Remaining<countdownBefore,"missing mobile face never pauses pre-Go countdown");
   Check(countdown.Fighters.All(fighter=>fighter.alive)&&countdown.Pairs[0].winner<0,"pre-Go face absence does not eliminate anyone");
   ReachDuel(countdown);int originalRound=countdown.Round;float before=countdown.Remaining;
   Step(countdown,Tournament.PhoneFaceLossGrace*.4f,new[]{0});

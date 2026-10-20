@@ -23,7 +23,8 @@ namespace Staredown
         [NonSerialized] public bool openingEyesPending;
         [NonSerialized] public float openingClosedFor;
         [NonSerialized] public bool phoneTrackingRequired;
-        [NonSerialized] public float faceMissingFor, phoneClosedFor;
+        public float faceMissingFor;
+        [NonSerialized] public float phoneClosedFor;
         [NonSerialized] public bool phoneClosureArmed;
         [NonSerialized] public bool disconnected;
     }
@@ -197,7 +198,7 @@ namespace Staredown
         {
             if (Phase != MatchPhase.Lobby && Phase != MatchPhase.Champion) return false;
             if (Fighters.Count < 2 || Fighters.Any(f => !f.ready || !f.valid)) { Announcement = "EVERY PLAYER MUST CALIBRATE FIRST"; return false; }
-            foreach (var f in Fighters) { f.alive = true; f.roundWins = 0; f.hasRoomPose=false; f.dancing=false; f.status = "READY"; if(f.bot)f.left=f.right=0; }
+            foreach (var f in Fighters) { f.alive = true; f.roundWins = 0; f.hasRoomPose=false; f.dancing=false; f.phoneTrackingRequired|=f.phoneCamera; f.status = "READY"; if(f.bot)f.left=f.right=0; }
             MatchToken=Guid.NewGuid().ToString("N");Round = 0; Winner = -1; Tosses.Clear(); NextRound(); return true;
         }
         public bool RoomPose(int id,Vector3 position,float yaw)
@@ -214,7 +215,7 @@ namespace Staredown
         {
             if(Phase!=MatchPhase.Champion)return;
             Fighters.RemoveAll(f=>f.disconnected);
-            foreach(var f in Fighters){f.alive=true;f.pair=-1;f.roundWins=0;f.hasRoomPose=false;f.status=f.ready&&f.valid?"READY":"CALIBRATE";}
+            foreach(var f in Fighters){f.alive=true;f.pair=-1;f.roundWins=0;f.hasRoomPose=false;f.phoneTrackingRequired=false;f.faceMissingFor=0;f.status=f.ready&&f.valid?"READY":"CALIBRATE";}
             Pairs.Clear();Tosses.Clear();TrackingPaused=false;FinalRound=false;Remaining=0;Round=0;Phase=MatchPhase.Lobby;
             Announcement="BACK IN THE ARENA / READY FOR ANOTHER MATCH";
             FillVacantSeats();
@@ -225,7 +226,7 @@ namespace Staredown
             if (survivors.Count <= 1) { Phase = MatchPhase.Champion; Winner = survivors.Count == 1 ? survivors[0].id : -1; Announcement = Winner < 0 ? "MATCH ENDED" : survivors[0].DisplayName + " / UNBLINKING CHAMPION"; if(survivors.Count==1&&survivors[0].bot)survivors[0].dancing=true; Remaining = 8; return; }
             Round++; FinalRound = survivors.Count == 2; Pairs.Clear();
             foreach (var f in Fighters) f.pair = -1;
-            foreach (var f in survivors){f.phoneTrackingRequired=f.phoneCamera;f.faceMissingFor=f.phoneClosedFor=0;f.phoneClosureArmed=true;}
+            foreach (var f in survivors){f.phoneTrackingRequired|=f.phoneCamera;f.faceMissingFor=f.phoneClosedFor=0;f.phoneClosureArmed=true;}
             // Rotate seeding each round so a potential bye does not always favor the same seat.
             if (survivors.Count > 2) { int n = Round % survivors.Count; survivors = survivors.Skip(n).Concat(survivors.Take(n)).ToList(); }
             if (Round == 1 && BotFillEnabled)
@@ -249,6 +250,9 @@ namespace Staredown
         public void Input(int id, float l, float r, bool valid, bool ready, int blink, float yaw, float pitch, bool demo = false, bool capturedBlinks = false)
         {
             var f = Find(id); if (f == null || f.bot) return;
+            // Capture-event capability identifies a phone even if video is
+            // switched off just before the host admits the next round.
+            if(capturedBlinks)f.phoneTrackingRequired=true;
             f.left = Mathf.Clamp01(l); f.right = Mathf.Clamp01(r); f.valid = valid; f.ready = ready; f.lastInput = Clock;
             f.yaw = Mathf.Clamp(yaw, -85, 85); f.pitch = Mathf.Clamp(pitch, -60, 60);
             if (Phase == MatchPhase.Lobby) { f.demo=demo; f.status = !valid ? "TRACKING LOST" : ready ? "READY" : "CALIBRATE"; }
@@ -364,7 +368,11 @@ namespace Staredown
             else if (Phase == MatchPhase.Champion) { Remaining-=dt; if(Remaining<=0)ReturnToLobby(); }
         }
         bool PausesForTracking(Fighter fighter)
-        {return !fighter.valid&&!(Phase==MatchPhase.Duel&&fighter.phoneTrackingRequired);}
+        {
+            // A phone contestant owns keeping their eyes in view. Losing the
+            // camera must never hold the countdown or another player's duel.
+            return !fighter.valid&&!fighter.phoneTrackingRequired;
+        }
         bool ShouldPauseForTracking()
         {return (Phase==MatchPhase.Countdown||Phase==MatchPhase.Duel)&&Pairs.Any(p=>p.winner<0&&(PausesForTracking(Find(p.a))||PausesForTracking(Find(p.b))));}
         void UpdatePhoneFace(Fighter fighter,float dt)

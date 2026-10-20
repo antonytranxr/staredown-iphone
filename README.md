@@ -46,6 +46,6 @@ The app opens in portrait. Once you enable the camera, permission interruptions 
 
 ## Validation status
 
-The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Native iPhone blink accuracy and sustained performance still need further device validation. The latest Unity iPhone export is version 1.1.6 build 9 from Unity 6000.3.26f1 LTS. Its native development build is installed on the connected iPhone, and a live Relay receiver comparison confirms improved video delivery. Shared video remains capped at six FPS. No TestFlight upload was produced. See `VALIDATION.md`.
+The earlier iPhone export and signed native development build succeeded. Automated shared-protocol and synthetic camera/blink tests passed. Native iPhone blink accuracy and sustained performance still need further device validation. The latest Unity iPhone export is version 1.1.7 build 10 from Unity 6000.3.26f1 LTS. Its native development build is installed on the connected iPhone, and includes the uninterrupted mobile countdown and live eye-status card. The preceding version was validated in a live Relay receiver comparison. Shared video remains capped at six FPS. No TestFlight upload was produced. See `VALIDATION.md`.
 
 `SOURCE_SNAPSHOT.json` identifies the local source checkpoint used for this upload. No open-source license is granted to the game or bundled third-party content by uploading it here.

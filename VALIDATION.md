@@ -1,3 +1,13 @@
+# Mobile eye-status and uninterrupted countdown — 2026-10-20
+
+Phone 1.1.7 (10) enlarges the selfie automatically for Countdown and Duel, with live per-eye OPEN/CLOSING/CLOSED/LOST labels, color feedback, concise rules and a shrinking missing-face grace bar. Eye indicators follow current local samples rather than the six-FPS shared thumbnail cadence. The preview returns to compact size after the contestant advances or is eliminated. Both portrait and landscape keep Settings, dance and the arena view accessible.
+
+The shared host rule never pauses a countdown for mobile tracking loss. Blinks before Go remain free. After Go, one second without the face forfeits that contestant while other duels continue. Phone identity remains latched through camera-off and subsequent rounds. Quest hosts also need the matching 1.18.5 (39) update.
+
+Passed 216 policy/identity/grace checks, 20 HUD checks, 38 mobile-room checks, 36 captured-blink checks, 205 countdown checks, 20 pause/order checks and 151 UI touch/layout/text-fit checks. Fourteen 2x-MSAA portrait/landscape captures were reviewed. Inputs were synthetic; physical eye classification and end-to-end play still need human testing.
+
+Unity 6000.3.26f1 export: zero errors, three warnings. All 33 export checks pass. Native device-signed build succeeded; 1.1.7 (10) is installed and launched on the connected iPhone. TestFlight was not updated. Reports are in Validation/2026-10-20-mobile-eye-status/.
+
 # Video delivery diagnostics — 2026-10-20
 
 Candidate phone **1.1.6 (9)** uses capability-negotiated, independently framed video packets, avoiding UTP fragment ordering losses. Old peers retain legacy video and room v8 compatibility. Both endpoints need updated builds for the repaired delivery path. Departed contestant roots are released and human markers reuse one mesh.

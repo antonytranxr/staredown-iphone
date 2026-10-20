@@ -247,9 +247,25 @@ public static class StareMobileUiChecks
                 Inside(hud.StartButton.GetComponent<RectTransform>(),safe,camera,check,prefix+" lobby Start button");
                 if(hud.CaptionPanelRect.gameObject.activeInHierarchy)Inside(hud.CaptionPanelRect,safe,camera,check,prefix+" lobby caption");
                 var lobby=Capture(camera,target,Path.Combine(outputFolder,prefix+"-practice-lobby.png"));UnityEngine.Object.DestroyImmediate(lobby);
+                // Render the actual competition card at native phone safe-area
+                // sizes, including independent eyes and missing-face grace.
+                var contest=new Tournament();contest.Add(0,"UI Pilot").phoneCamera=true;contest.Add(1,"Friend");contest.Input(0,0,0,true,true,0,0,0);contest.Input(1,0,0,true,true,0,0,0);contest.Start();
+                long eyeSequence=100;double eyeTime=100+index*100;
+                foreach(string pose in new[]{"countdown","open","closing","lost"})
+                {
+                    contest.Phase=pose=="countdown"?MatchPhase.Countdown:MatchPhase.Duel;contest.Remaining=pose=="countdown"?3:40;
+                    bool tracked=pose!="lost";float closed=pose=="closing"?.5f:0;contest.Find(0).faceMissingFor=tracked?0:.6f;
+                    face.SubmitTestSample(closed,0,tracked,eyeTime+=.04,eyeSequence++);
+                    typeof(StareMobileSession).GetProperty("State").SetValue(session,contest.Snapshot());Tick(hud);Canvas.ForceUpdateCanvases();
+                    check(hud.CompetitionPreview&&hud.PreviewExpanded,"competition automatically expands selfie: "+prefix+" "+pose);
+                    Inside(hud.CameraPanelRect,safe,camera,check,prefix+" competition selfie "+pose);
+                    foreach(var label in hud.CameraPanelRect.GetComponentsInChildren<Text>().Where(label=>label.gameObject.activeInHierarchy))
+                        check(label.preferredHeight<=label.rectTransform.rect.height+3,"competition text fits: "+label.text);
+                    var matchShot=Capture(camera,target,Path.Combine(outputFolder,prefix+"-eyes-"+pose+".png"));UnityEngine.Object.DestroyImmediate(matchShot);
+                }
                 session.Leave();camera.targetTexture=oldTarget;target.Release();UnityEngine.Object.DestroyImmediate(target);target=null;
             }
-            return count+" phone UI/name/settings/orientation checks passed; six 2x-MSAA PNGs saved in "+Path.GetFullPath(outputFolder);
+            return count+" phone UI/name/settings/orientation checks passed; fourteen 2x-MSAA PNGs saved in "+Path.GetFullPath(outputFolder);
         }
         finally
         {

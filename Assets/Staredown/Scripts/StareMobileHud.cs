@@ -13,6 +13,7 @@ namespace Staredown
         static readonly Color Ink=new Color(.025f,.045f,.07f,.96f),Surface=new Color(.065f,.105f,.145f,.98f),Cyan=new Color(.25f,.94f,1),Muted=new Color(.67f,.77f,.82f);
         StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
         RectTransform voicePanel;Text voiceDetails;Button voiceRepair,voiceDone;
+        RectTransform leftEyeChip,rightEyeChip,trackingGrace,trackingGraceFill;Text leftEyeText,rightEyeText,eyeGuidance;
         RectTransform safe,home,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
         Text brand,brandTag,hero,description,namePrompt,homeHint,homeStatus,roomLabel,roomStatus,caption,movementHint,lookHint,cameraTag,cameraStatus,cameraPrivacy;
         Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus,diagnosticsTitle,diagnosticsText;
@@ -22,6 +23,8 @@ namespace Staredown
         Vector2 lastScreen,layoutSize;Rect lastSafe;bool portrait,lastConnected,lastLobby,lastHosting,layoutReady;
         string pendingEntry="",pendingCode="",entryError="";bool syncingMusic;
         bool previewExpanded,wasConnected,wasCanMove;float movementHintUntil,captionChangedAt;string previousCaption="";
+        bool contestPreview;float missingEyesAt=-1;
+        static readonly Color EyeGood=new Color(.31f,1,.73f),EyeWarning=new Color(1,.77f,.31f),EyeDanger=new Color(1,.37f,.40f);
 #if UNITY_EDITOR
         bool reviewViewport;Vector2 reviewPixels;Rect reviewSafe;
 #endif
@@ -55,8 +58,14 @@ namespace Staredown
         public Button CameraPowerButton=>cameraPower;
         public Button CameraPreviewButton=>cameraCard;
         public Button CameraSetupButton=>cameraToggle;
-        public bool CollapsedPreview=>session!=null&&session.Connected&&!previewExpanded;
-        public bool PreviewExpanded=>session!=null&&session.Connected&&previewExpanded;
+        public bool CollapsedPreview=>session!=null&&session.Connected&&!PreviewExpanded;
+        public bool PreviewExpanded=>session!=null&&session.Connected&&(previewExpanded||contestPreview);
+        public bool CompetitionPreview=>contestPreview;
+        public string EyeStatus=>cameraStatus!=null?cameraStatus.text:"";
+        public string EyeGuidance=>eyeGuidance!=null?eyeGuidance.text:"";
+        public string LeftEyeStatus=>leftEyeText!=null?leftEyeText.text:"";
+        public string RightEyeStatus=>rightEyeText!=null?rightEyeText.text:"";
+        public float TrackingGraceRemaining {get;private set;}=1;
         public RectTransform RoomToolbarRect=>roomBar;
         public string TrackingDiagnostics=>diagnosticsText!=null?diagnosticsText.text:"";
         public string PendingEntryAction=>pendingEntry;
@@ -129,6 +138,8 @@ namespace Staredown
             cameraCard.onClick.AddListener(()=>{if(session.Connected)TogglePreview();else CameraSetup();});
             cameraTag=Label("FRONT CAMERA",cameraPanel,Vector2.zero,Vector2.one,14,Cyan,true);
             cameraFrame=Box("Camera frame",cameraPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
+            var backing=LayoutRect("Camera letterbox",cameraFrame,Vector2.zero,Vector2.one,new Vector2(3,3),new Vector2(-3,-3));
+            var backingImage=backing.gameObject.AddComponent<Image>();backingImage.sprite=rounded;backingImage.type=Image.Type.Sliced;backingImage.color=Surface;backingImage.raycastTarget=false;
             var image=LayoutRect("Front facing preview",cameraFrame,Vector2.zero,Vector2.one,new Vector2(3,3),new Vector2(-3,-3));
             preview=image.gameObject.AddComponent<RawImage>();preview.raycastTarget=false;
             // Preview pixels are upright and unmirrored. Only this LOCAL display
@@ -138,6 +149,13 @@ namespace Staredown
             cameraStatus=Label("Camera is off",cameraPanel,Vector2.zero,Vector2.one,16,Color.white);
             cameraPrivacy=Label("Preview only",cameraPanel,Vector2.zero,Vector2.one,13,Muted);
             cameraToggle=ButtonElement("Enable camera",cameraPanel,Vector2.zero,Vector2.one,CameraSetup,true);cameraToggleLabel=cameraToggle.GetComponentInChildren<Text>();Fit(cameraToggleLabel,15,19);
+            leftEyeChip=Box("Left eye status",cameraPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);leftEyeChip.GetComponent<Image>().raycastTarget=false;
+            rightEyeChip=Box("Right eye status",cameraPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);rightEyeChip.GetComponent<Image>().raycastTarget=false;
+            leftEyeText=Label("L · OPEN",leftEyeChip,Vector2.zero,Vector2.one,14,EyeGood,true,TextAnchor.MiddleCenter);StretchLabel(leftEyeText,3,1);
+            rightEyeText=Label("R · OPEN",rightEyeChip,Vector2.zero,Vector2.one,14,EyeGood,true,TextAnchor.MiddleCenter);StretchLabel(rightEyeText,3,1);
+            eyeGuidance=Label("Keep both eyes in view.",cameraPanel,Vector2.zero,Vector2.one,16,Muted,false,TextAnchor.MiddleCenter);
+            trackingGrace=Box("Tracking grace",cameraPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);trackingGrace.GetComponent<Image>().raycastTarget=false;
+            trackingGraceFill=Box("Time to return eyes",trackingGrace,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),EyeDanger);trackingGraceFill.GetComponent<Image>().raycastTarget=false;
         }
         void BuildControls()
         {
@@ -266,7 +284,7 @@ namespace Staredown
         }
         public void TogglePreview()
         {
-            if(!session.Connected)return;previewExpanded=!previewExpanded;layoutReady=false;
+            if(!session.Connected||contestPreview)return;previewExpanded=!previewExpanded;layoutReady=false;
             ApplyLayout(layoutSize.x,layoutSize.y,portrait,true,session.State.phase==(int)MatchPhase.Lobby,session.Hosting);
         }
         void PauseTouches(){joystick?.Release();lookPad?.Release();if(dancePicker!=null)dancePicker.gameObject.SetActive(false);}
@@ -276,6 +294,10 @@ namespace Staredown
         {
             if(session==null||canvas==null)return;UpdateSafeArea();
             bool connected=session.Connected;var state=session.State??new ArenaState();bool lobby=state.phase==(int)MatchPhase.Lobby;
+            var local=state.fighters.FirstOrDefault(f=>f.id==session.LocalId);
+            bool active=local!=null&&local.alive&&local.pair>=0&&local.pair<state.pairs.Length&&state.pairs[local.pair].winner<0;
+            bool competing=connected&&active&&(state.phase==(int)MatchPhase.Countdown||state.phase==(int)MatchPhase.Duel);
+            if(contestPreview!=competing){contestPreview=competing;missingEyesAt=-1;layoutReady=false;}
             if(connected!=wasConnected){previewExpanded=false;layoutReady=false;if(connected)movementHintUntil=Time.unscaledTime+4;}
             if(connected&&session.CanMove&&!wasCanMove)movementHintUntil=Time.unscaledTime+4;
             wasConnected=connected;wasCanMove=session.CanMove;
@@ -299,10 +321,8 @@ namespace Staredown
             bool rosterReady=state.fighters.Length>=2&&state.fighters.All(f=>f.bot||f.ready&&f.valid);
             start.gameObject.SetActive(session.Hosting&&lobby&&!modal);start.interactable=!session.Busy&&session.HasPlayerName&&localReady&&rosterReady;
             startLabel.text=localReady&&!rosterReady?"Waiting…":"Start match";
-            var local=state.fighters.FirstOrDefault(f=>f.id==session.LocalId);
             caption.text=MatchCaption(state,local,session.Status);
             if(caption.text!=previousCaption){previousCaption=caption.text;captionChangedAt=Time.unscaledTime;}
-            bool active=local!=null&&local.alive&&local.pair>=0&&local.pair<state.pairs.Length&&state.pairs[local.pair].winner<0;
             bool urgent=active&&(!local.valid||state.trackingPaused),countdown=active&&state.phase==(int)MatchPhase.Countdown;
             bool freshCaption=Time.unscaledTime-captionChangedAt<(state.phase==(int)MatchPhase.Champion?5:3);
             captionPanel.gameObject.SetActive(connected&&!modal&&!string.IsNullOrEmpty(caption.text)&&(urgent||countdown||freshCaption));
@@ -312,6 +332,7 @@ namespace Staredown
             cameraTag.text=connected?(previewExpanded?"YOUR CAMERA −":live?"YOU · LIVE +":"YOU +"):"YOUR CAMERA";
             cameraStatus.text=recovering?"Resuming camera…":!enabledIntent?"Camera off":!running?"Starting camera…":!mobileCamera.Valid?"Face not visible":!mobileCamera.Ready?"Calibrating "+mobileCamera.CalibrationPercent+"%":"Eyes tracked";
             cameraStatus.color=localReady?Cyan:enabledIntent?new Color(1,.76f,.47f):Muted;
+            UpdateEyeStatus(state,local,running&&mobileCamera.Valid);
             cameraPrivacy.text=live?"Shared in this room":enabledIntent?"Room video when joined":"Enable once to track blinks";
             cameraPrivacy.gameObject.SetActive(!connected);cameraToggle.gameObject.SetActive(!connected);
             cameraToggleLabel.text=enabledIntent?"Camera settings":"Enable camera";
@@ -331,6 +352,34 @@ namespace Staredown
             settingsName.interactable=!connected||lobby;settingsLeave.gameObject.SetActive(connected);
             nameConfirm.interactable=StarePlayerName.IsValid(nameEditorInput.text)&&!session.Busy;
         }
+        public static string EyeLabel(bool tracked,float closure)
+        {return !tracked?"LOST":closure>=BlinkGate.ClosureThreshold?"CLOSED":closure>=.3f?"CLOSING":"OPEN";}
+        static Color EyeColor(bool tracked,float closure)
+        {return !tracked||closure>=BlinkGate.ClosureThreshold?EyeDanger:closure>=.3f?EyeWarning:EyeGood;}
+        void UpdateEyeStatus(ArenaState state,Fighter local,bool tracked)
+        {
+            leftEyeChip.gameObject.SetActive(contestPreview);rightEyeChip.gameObject.SetActive(contestPreview);eyeGuidance.gameObject.SetActive(contestPreview);
+            cameraCard.interactable=!contestPreview;trackingGrace.gameObject.SetActive(false);
+            cameraFrame.GetComponent<Image>().color=Surface;
+            if(!contestPreview){missingEyesAt=-1;TrackingGraceRemaining=1;return;}
+            var camera=session.MobileCamera;float closure=Mathf.Max(camera.Left,camera.Right);
+            leftEyeText.text="L · "+EyeLabel(tracked,camera.Left);rightEyeText.text="R · "+EyeLabel(tracked,camera.Right);
+            leftEyeText.color=EyeColor(tracked,camera.Left);rightEyeText.color=EyeColor(tracked,camera.Right);
+            cameraTag.text="YOUR EYES";
+            cameraStatus.text=!tracked?"Eyes not found":closure>=BlinkGate.ClosureThreshold?"Eyes closed":closure>=.3f?"Keep eyes open":"Eyes open";
+            cameraStatus.color=EyeColor(tracked,closure);cameraFrame.GetComponent<Image>().color=cameraStatus.color;
+            bool countdown=state.phase==(int)MatchPhase.Countdown;
+            eyeGuidance.text=countdown?(tracked?"Stay in view. Blinks free until GO.":"Find both eyes before GO."):tracked?"Blink or leave view = out.":"Face the camera or you're out.";
+            if(!countdown&&!tracked)
+            {
+                if(missingEyesAt<0)missingEyesAt=Time.unscaledTime;
+                float elapsed=Mathf.Max(Time.unscaledTime-missingEyesAt,local!=null?local.faceMissingFor:0);
+                TrackingGraceRemaining=Mathf.Clamp01(1-elapsed/Tournament.PhoneFaceLossGrace);
+                trackingGrace.gameObject.SetActive(true);
+                trackingGraceFill.sizeDelta=new Vector2(trackingGrace.rect.width*TrackingGraceRemaining,trackingGrace.rect.height);
+            }
+            else{missingEyesAt=-1;TrackingGraceRemaining=1;}
+        }
         public static string MatchCaption(ArenaState state,Fighter local,string status)
         {
             if(state==null||local==null)return "";
@@ -339,7 +388,7 @@ namespace Staredown
             bool active=local.pair>=0&&local.pair<state.pairs.Length&&state.pairs[local.pair].winner<0;
             if(active&&state.trackingPaused)return "Tracking paused · face your camera";
             if(active&&state.phase==(int)MatchPhase.Countdown)return "Get ready · "+Mathf.CeilToInt(state.remaining);
-            if(active&&state.phase==(int)MatchPhase.Duel)return !local.valid?"Face not visible · return to camera":"";
+            if(active&&state.phase==(int)MatchPhase.Duel)return ""; // The live eye card owns tracking guidance.
             if(state.phase==(int)MatchPhase.Lobby)return "";
             return "You advanced · next round soon";
         }
@@ -388,9 +437,21 @@ namespace Staredown
                 Put(homeHint,new Vector2(20,-199),new Vector2(inner,42),14);PlaceButton(practice,20,homeHeight-232,inner,54,21);PlaceButton(host,20,homeHeight-166,inner,54,21);
                 FieldPlace(code,new Vector2(20,-(homeHeight-100)),new Vector2(inner-122,54));PlaceButton(join,homeWidth-128,homeHeight-100,108,54,21);Put(homeStatus,new Vector2(20,-(homeHeight-38)),new Vector2(inner,28),16);
             }
-            float cameraWidth=connected?(previewExpanded?218:132):(tall?188:218),cameraHeight=connected?(previewExpanded?252:152):328;
+            float cameraWidth=contestPreview?(tall?276:244):connected?(previewExpanded?218:132):(tall?188:218),cameraHeight=contestPreview?(tall?384:330):connected?(previewExpanded?252:152):328;
             Place(cameraPanel,Vector2.one,Vector2.one,new Vector2(-margin,connected?-88:tall?-100:-88),new Vector2(cameraWidth,cameraHeight));
-            if(connected&&!previewExpanded)
+            if(contestPreview)
+            {
+                float frameHeight=tall?224:172,eyesDown=frameHeight+43,titleDown=eyesDown+30,hintDown=titleDown+33;
+                Put(cameraTag,new Vector2(12,-8),new Vector2(cameraWidth-24,18),13);
+                Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-34),new Vector2(cameraWidth-24,frameHeight));
+                float half=(cameraWidth-32)*.5f;
+                Place(leftEyeChip,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-eyesDown),new Vector2(half,24));
+                Place(rightEyeChip,new Vector2(0,1),new Vector2(0,1),new Vector2(20+half,-eyesDown),new Vector2(half,24));
+                Put(cameraStatus,new Vector2(12,-titleDown),new Vector2(cameraWidth-24,26),22);cameraStatus.alignment=TextAnchor.MiddleCenter;Fit(cameraStatus,18,22);
+                Put(eyeGuidance,new Vector2(12,-hintDown),new Vector2(cameraWidth-24,36),16);Fit(eyeGuidance,14,16);
+                Place(trackingGrace,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-(cameraHeight-13)),new Vector2(cameraWidth-24,4));
+            }
+            else if(connected&&!previewExpanded)
             {
                 Put(cameraTag,new Vector2(8,-6),new Vector2(cameraWidth-16,16),12);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(8,-25),new Vector2(cameraWidth-16,96));
                 Put(cameraStatus,new Vector2(8,-124),new Vector2(cameraWidth-16,22),14);Fit(cameraStatus,12,14);
@@ -405,6 +466,7 @@ namespace Staredown
                 Put(cameraTag,new Vector2(12,-10),new Vector2(cameraWidth-24,22),14);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-40),new Vector2(cameraWidth-24,136));
                 Put(cameraStatus,new Vector2(12,-184),new Vector2(cameraWidth-24,43),16);Fit(cameraStatus,14,16);Put(cameraPrivacy,new Vector2(12,-229),new Vector2(cameraWidth-24,18),12);PlaceButton(cameraToggle,12,252,cameraWidth-24,64,17);
             }
+            if(!contestPreview)cameraStatus.alignment=TextAnchor.UpperLeft;
             float roomWidth=Mathf.Min(width-160,560);
             Place(roomBar,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-12),new Vector2(roomWidth,64));
             Put(roomLabel,new Vector2(12,-7),new Vector2(roomWidth-24,29),22);Put(roomStatus,new Vector2(12,-39),new Vector2(roomWidth-24,19),14);

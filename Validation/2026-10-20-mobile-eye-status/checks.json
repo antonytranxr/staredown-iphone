@@ -1,0 +1,27 @@
+{
+  "policyChecks": 216,
+  "mobileHudChecks": 20,
+  "mobileRoomChecks": 38,
+  "capturedBlinkChecks": 36,
+  "countdownChecks": 205,
+  "pausedPhoneChecks": 20,
+  "touchLayoutChecks": 151,
+  "renderedOrientations": [
+    "portrait",
+    "landscape"
+  ],
+  "renderedStates": [
+    "home",
+    "settings",
+    "lobby",
+    "countdown",
+    "open",
+    "closing",
+    "lost"
+  ],
+  "limits": "Synthetic eye samples and Editor renders; builds installed/launched, physical eye-status gameplay requires user testing.",
+  "installed": {
+    "iPhone": "1.1.7 (10)",
+    "Quest": "1.18.5 (39)"
+  }
+}
