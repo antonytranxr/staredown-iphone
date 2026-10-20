@@ -1,3 +1,11 @@
+# Simpler mobile start screen — 2026-10-20
+
+Unity export succeeded with zero errors and three warnings, all 33 export checks passed, and native device signing succeeded. Installed 1.1.8 (11) was verified on the connected iPhone. The phone was locked, so automatic launch was denied; physical screen review remains for the user. TestFlight was not updated.
+
+Phone 1.1.8 (11) gives player identity its own card, headed YOUR NAME with an Enter your name field and a short explanation. Room creation and joining live in a separate Play with friends card, with a specifically labeled four-digit code field. Practice is a secondary action. A dimmed arena backdrop and compact camera setup reduce visual clutter. Name saving, camera consent and direct entry behavior are preserved.
+
+All 157 existing and focused UI checks passed, including actual touch raycasts, required name validation, disabled controls, settings, camera continuity and portrait/landscape safe areas. Sixteen 2x-MSAA screenshots include both empty and saved names. The identity and room entry groups do not overlap in either orientation. These are Editor layout/touch checks; physical keyboard and camera behavior were not re-certified by them.
+
 # Mobile eye-status and uninterrupted countdown — 2026-10-20
 
 Phone 1.1.7 (10) enlarges the selfie automatically for Countdown and Duel, with live per-eye OPEN/CLOSING/CLOSED/LOST labels, color feedback, concise rules and a shrinking missing-face grace bar. Eye indicators follow current local samples rather than the six-FPS shared thumbnail cadence. The preview returns to compact size after the contestant advances or is eliminated. Both portrait and landscape keep Settings, dance and the arena view accessible.

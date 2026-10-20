@@ -14,7 +14,8 @@ namespace Staredown
         StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
         RectTransform voicePanel;Text voiceDetails;Button voiceRepair,voiceDone;
         RectTransform leftEyeChip,rightEyeChip,trackingGrace,trackingGraceFill;Text leftEyeText,rightEyeText,eyeGuidance;
-        RectTransform safe,home,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
+        RectTransform safe,homeShade,home,homeIntro,nameCard,playCard,homeStatusPanel,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
+        Text playTitle,joinHint;
         Text brand,brandTag,hero,description,namePrompt,homeHint,homeStatus,roomLabel,roomStatus,caption,movementHint,lookHint,cameraTag,cameraStatus,cameraPrivacy;
         Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus,diagnosticsTitle,diagnosticsText;
         InputField code,playerName,nameEditorInput;RawImage preview;Slider musicVolume;
@@ -97,27 +98,38 @@ namespace Staredown
         }
         void BuildHeader()
         {
+            homeShade=LayoutRect("Entry backdrop",safe.parent,Vector2.zero,Vector2.one,Vector2.zero,Vector2.zero);homeShade.SetAsFirstSibling();
+            var shade=homeShade.gameObject.AddComponent<Image>();shade.color=new Color(.008f,.018f,.028f,.78f);shade.raycastTarget=false;
             brand=Label("STAREDOWN",safe,Vector2.zero,Vector2.one,32,Color.white,true);brandTag=Label("PHONE × VR",safe,Vector2.zero,Vector2.one,16,Cyan,true);
             settingsButton=ButtonElement("Settings",safe,Vector2.zero,new Vector2(152,56),()=>ShowSettings(!SettingsVisible));
         }
         void BuildHome()
         {
-            home=Box("Join the arena",safe,Vector2.one,Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
-            hero=Label("Don't blink.",home,Vector2.zero,Vector2.one,42,Color.white,true);
-            description=Label("Keep your eyes open longer than your opponent.",home,Vector2.zero,Vector2.one,23,Color.white);
-            namePrompt=Label("YOUR ARENA NAME",home,Vector2.zero,Vector2.one,19,Cyan,true);
-            playerName=NameField(home);playerName.SetTextWithoutNotify(session.HasPlayerName?session.PlayerName:"");
+            home=LayoutRect("Join the arena",safe,new Vector2(0,1),new Vector2(0,1),Vector2.zero,Vector2.zero);
+            homeIntro=Box("Staring contest",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            hero=Label("Don't blink.",homeIntro,Vector2.zero,Vector2.one,42,Color.white,true);
+            description=Label("Keep your eyes open longer than your opponent.",homeIntro,Vector2.zero,Vector2.one,23,Color.white);
+            nameCard=Box("Your identity",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            namePrompt=Label("YOUR NAME",nameCard,Vector2.zero,Vector2.one,19,Cyan,true);
+            playerName=NameField(nameCard);playerName.SetTextWithoutNotify(session.HasPlayerName?session.PlayerName:"");
+            playerName.targetGraphic.color=new Color(.11f,.18f,.23f,1);
+            playerName.placeholder.GetComponent<Text>().text="Enter your name";
+            playerName.textComponent.alignment=TextAnchor.MiddleLeft;playerName.placeholder.GetComponent<Text>().alignment=TextAnchor.MiddleLeft;
             playerName.onValueChanged.AddListener(value=>entryError="");
             playerName.onEndEdit.AddListener(value=>playerName.SetTextWithoutNotify(StarePlayerName.Clean(value)));
-            homeHint=Label("Keep both eyes open to calibrate.\nFirst blink loses.",home,Vector2.zero,Vector2.one,21,Muted);
-            practice=ButtonElement("Practice with bots",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("practice"),true);
-            host=ButtonElement("Create room",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("host"));
-            var field=Box("Four digit room code",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
+            homeHint=Label("Shown above your avatar.",nameCard,Vector2.zero,Vector2.one,16,Muted);
+            playCard=Box("Play with friends",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            playTitle=Label("Play with friends",playCard,Vector2.zero,Vector2.one,22,Color.white,true);
+            joinHint=Label("HAVE A ROOM CODE?",playCard,Vector2.zero,Vector2.one,14,Muted,true);
+            practice=ButtonElement("Practice with bots",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("practice"));
+            host=ButtonElement("Create a room",playCard,Vector2.zero,Vector2.one,()=>RequestEntryForReview("host"),true);
+            var field=Box("Four digit room code",playCard,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
             code=field.gameObject.AddComponent<InputField>();code.characterLimit=StareRelayNetwork.CodeLength;code.contentType=InputField.ContentType.IntegerNumber;code.keyboardType=TouchScreenKeyboardType.NumberPad;
-            var value=Label("",field,new Vector2(14,-8),new Vector2(200,50),27,Color.white,true);var placeholder=Label("Room code",field,new Vector2(14,-8),new Vector2(200,50),23,Muted);
+            var value=Label("",field,new Vector2(14,-8),new Vector2(200,50),27,Color.white,true,TextAnchor.MiddleCenter);var placeholder=Label("4-digit code",field,new Vector2(14,-8),new Vector2(200,50),19,Muted,false,TextAnchor.MiddleCenter);
             code.textComponent=value;code.placeholder=placeholder;code.targetGraphic=field.GetComponent<Image>();
-            join=ButtonElement("Join",home,Vector2.zero,Vector2.one,()=>RequestEntryForReview("join"),true);
-            homeStatus=Label("Enter your name to continue.",home,Vector2.zero,Vector2.one,19,Muted);
+            join=ButtonElement("Join room",playCard,Vector2.zero,Vector2.one,()=>RequestEntryForReview("join"));
+            homeStatusPanel=Box("Entry feedback",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
+            homeStatus=Label("",homeStatusPanel,Vector2.zero,Vector2.one,17,EyeWarning);
         }
         void BuildRoom()
         {
@@ -304,13 +316,17 @@ namespace Staredown
             if(connected&&!lobby&&NameEditorVisible)ShowNameEditor(false);
             if(!layoutReady||connected!=lastConnected||lobby!=lastLobby||session.Hosting!=lastHosting)ApplyLayout(layoutSize.x,layoutSize.y,portrait,connected,lobby,session.Hosting);
             home.gameObject.SetActive(!connected);brand.gameObject.SetActive(!connected);brandTag.gameObject.SetActive(!connected);roomBar.gameObject.SetActive(connected);
+            homeShade.gameObject.SetActive(!connected);
             bool modal=SettingsVisible||NameEditorVisible;
             lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(false);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
             dance.gameObject.SetActive(connected&&!modal);dance.interactable=session.CanDance;
             if(!connected||!session.CanDance||modal)dancePicker.gameObject.SetActive(false);
             bool validDraft=StarePlayerName.IsValid(playerName.text);
+            homeHint.text=validDraft?"Shown above your avatar.":"Enter your name before playing.";
             practice.interactable=host.interactable=!session.Busy&&validDraft;join.interactable=!session.Busy&&validDraft&&StareRelayNetwork.ValidCode(code.text);
-            homeStatus.text=entryError.Length>0?entryError:!validDraft?"Enter your name to continue.":session.Status;
+            bool idleStatus=session.Status=="Enable your camera, or explore a room first."||session.Status=="Choose practice, create a room, or join friends.";
+            homeStatus.text=entryError.Length>0?entryError:!validDraft||idleStatus?"":session.Status;
+            homeStatusPanel.gameObject.SetActive(!string.IsNullOrEmpty(homeStatus.text));
             leave.gameObject.SetActive(false);editPlayerName.gameObject.SetActive(false);nameButtonLabel.text=session.PlayerName;
             roomLabel.text=string.IsNullOrEmpty(session.RoomCode)?"PRACTICE":"ROOM "+session.RoomCode;
             roomStatus.text=lobby?state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots":"Round "+state.round+" · "+state.fighters.Count(f=>f.alive)+" remaining";
@@ -420,25 +436,39 @@ namespace Staredown
             Place(settingsButton.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-margin,-12),new Vector2(connected?112:160,connected?64:70));
             StretchLabel(settingsButton.GetComponentInChildren<Text>(),6,3);Fit(settingsButton.GetComponentInChildren<Text>(),18,connected?21:23);
             Put(brand,new Vector2(16,-13),new Vector2(width-190,36),30);Put(brandTag,new Vector2(18,-51),new Vector2(width-190,24),16);
-            float homeWidth=tall?width-32:Mathf.Min(408,width-282);float homeTop=tall?88:82;float homeHeight=tall?784:Mathf.Min(484,height-homeTop-12);
+            float homeWidth=tall?width-32:Mathf.Min(760,width-282);float homeTop=tall?88:82;float homeHeight=tall?784:Mathf.Min(484,height-homeTop-12);
             Place(home,new Vector2(0,1),new Vector2(0,1),new Vector2(margin,-homeTop),new Vector2(homeWidth,homeHeight));
             float inner=homeWidth-40;
             if(tall)
             {
-                hero.text="Don't\nblink.";Put(hero,new Vector2(20,-18),new Vector2(homeWidth-228,110),44);Put(description,new Vector2(20,-140),new Vector2(homeWidth-228,118),22);
-                Put(namePrompt,new Vector2(20,-320),new Vector2(inner,24),19);FieldPlace(playerName,new Vector2(20,-352),new Vector2(inner,64));
-                Put(homeHint,new Vector2(20,-427),new Vector2(inner,48),19);PlaceButton(practice,20,484,inner,70,24);PlaceButton(host,20,566,inner,70,24);
-                FieldPlace(code,new Vector2(20,-648),new Vector2(inner-140,70));PlaceButton(join,homeWidth-146,648,126,70,24);Put(homeStatus,new Vector2(20,-731),new Vector2(inner,43),18);
+                Place(homeIntro,new Vector2(0,1),new Vector2(0,1),Vector2.zero,new Vector2(homeWidth,240));
+                hero.text="Don't blink.";Put(hero,new Vector2(20,-22),new Vector2(homeWidth-244,62),40);Fit(hero,28,40);
+                Put(description,new Vector2(20,-102),new Vector2(homeWidth-244,100),22);
+                Place(nameCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-256),new Vector2(homeWidth,144));
+                Place(playCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-416),new Vector2(homeWidth,236));
+                PlaceButton(practice,0,668,homeWidth,60,22);
+                Place(homeStatusPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-744),new Vector2(homeWidth,40));
             }
             else
             {
-                hero.text="Don't blink.";Put(hero,new Vector2(20,-14),new Vector2(inner,44),30);Put(description,new Vector2(20,-61),new Vector2(inner,44),18);
-                Put(namePrompt,new Vector2(20,-109),new Vector2(inner,20),16);FieldPlace(playerName,new Vector2(20,-135),new Vector2(inner,52));
-                Put(homeHint,new Vector2(20,-199),new Vector2(inner,42),14);PlaceButton(practice,20,homeHeight-232,inner,54,21);PlaceButton(host,20,homeHeight-166,inner,54,21);
-                FieldPlace(code,new Vector2(20,-(homeHeight-100)),new Vector2(inner-122,54));PlaceButton(join,homeWidth-128,homeHeight-100,108,54,21);Put(homeStatus,new Vector2(20,-(homeHeight-38)),new Vector2(inner,28),16);
+                Place(homeIntro,new Vector2(0,1),new Vector2(0,1),Vector2.zero,new Vector2(homeWidth,104));
+                hero.text="Don't blink.";Put(hero,new Vector2(20,-12),new Vector2(inner,42),34);Fit(hero,28,34);Put(description,new Vector2(20,-62),new Vector2(inner,32),18);
+                float column=(homeWidth-16)*.5f;
+                Place(nameCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-120),new Vector2(column,144));
+                Place(playCard,new Vector2(0,1),new Vector2(0,1),new Vector2(column+16,-120),new Vector2(column,236));
+                PlaceButton(practice,0,280,column,58,21);
+                Place(homeStatusPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-372),new Vector2(homeWidth,60));
             }
-            float cameraWidth=contestPreview?(tall?276:244):connected?(previewExpanded?218:132):(tall?188:218),cameraHeight=contestPreview?(tall?384:330):connected?(previewExpanded?252:152):328;
+            float nameWidth=nameCard.rect.width-40,playWidth=playCard.rect.width-40,joinWidth=tall?140:112;
+            Put(namePrompt,new Vector2(20,-14),new Vector2(nameWidth,24),18);FieldPlace(playerName,new Vector2(20,-48),new Vector2(nameWidth,60));
+            Put(homeHint,new Vector2(20,-116),new Vector2(nameWidth,20),15);
+            Put(playTitle,new Vector2(20,-14),new Vector2(playWidth,28),22);PlaceButton(host,20,54,playWidth,56,21);
+            Put(joinHint,new Vector2(20,-122),new Vector2(playWidth,20),14);
+            FieldPlace(code,new Vector2(20,-150),new Vector2(playWidth-joinWidth-12,64));PlaceButton(join,32+playWidth-joinWidth-12,150,joinWidth,64,20);
+            Put(homeStatus,new Vector2(16,-8),new Vector2(homeWidth-32,tall?24:44),17);Fit(homeStatus,14,17);
+            float cameraWidth=contestPreview?(tall?276:244):connected?(previewExpanded?218:132):(tall?188:218),cameraHeight=contestPreview?(tall?384:330):connected?(previewExpanded?252:152):216;
             Place(cameraPanel,Vector2.one,Vector2.one,new Vector2(-margin,connected?-88:tall?-100:-88),new Vector2(cameraWidth,cameraHeight));
+            cameraPanel.GetComponent<Image>().color=connected?Ink:Surface;
             if(contestPreview)
             {
                 float frameHeight=tall?224:172,eyesDown=frameHeight+43,titleDown=eyesDown+30,hintDown=titleDown+33;
@@ -463,8 +493,9 @@ namespace Staredown
             }
             else
             {
-                Put(cameraTag,new Vector2(12,-10),new Vector2(cameraWidth-24,22),14);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-40),new Vector2(cameraWidth-24,136));
-                Put(cameraStatus,new Vector2(12,-184),new Vector2(cameraWidth-24,43),16);Fit(cameraStatus,14,16);Put(cameraPrivacy,new Vector2(12,-229),new Vector2(cameraWidth-24,18),12);PlaceButton(cameraToggle,12,252,cameraWidth-24,64,17);
+                Put(cameraTag,new Vector2(12,-8),new Vector2(cameraWidth-24,18),13);Place(cameraFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(12,-32),new Vector2(cameraWidth-24,80));
+                Put(cameraStatus,new Vector2(12,-116),new Vector2(cameraWidth-24,20),14);Fit(cameraStatus,12,14);PlaceButton(cameraToggle,12,140,cameraWidth-24,48,17);
+                Put(cameraPrivacy,new Vector2(12,-196),new Vector2(cameraWidth-24,16),11);
             }
             if(!contestPreview)cameraStatus.alignment=TextAnchor.UpperLeft;
             float roomWidth=Mathf.Min(width-160,560);

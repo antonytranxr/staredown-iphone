@@ -163,6 +163,7 @@ public static class StareMobileUiChecks
                 var size=sizes[index];var safe=insets[index];string prefix=index==0?"portrait":"landscape";
                 session.Leave();StarePlayerName.Save("Existing Pilot");session.SetLandscapeMode(index!=0);hud.ShowSettings(false);hud.ShowNameEditor(false);
                 hud.PlayerNameInput.SetTextWithoutNotify("Existing Pilot");hud.RoomCodeInput.SetTextWithoutNotify("1234");
+                hud.PlayerNameInput.onValueChanged.Invoke("Existing Pilot");
                 target=new RenderTexture(size.x,size.y,24,RenderTextureFormat.ARGB32){antiAliasing=2,name="Phone "+prefix+" UI fixture"};
                 int supported=SystemInfo.GetRenderTextureSupportedMSAASampleCount(target.descriptor);
                 check(supported>=2,"graphics device supports the required 2x UI capture");
@@ -187,6 +188,9 @@ public static class StareMobileUiChecks
                 Inside(hud.JoinButton.GetComponent<RectTransform>(),safe,camera,check,prefix+" Join button");
                 Inside(hud.CameraPanelRect,safe,camera,check,prefix+" camera panel");
                 check(!ScreenRect(hud.PlayerNameInput.GetComponent<RectTransform>(),camera).Overlaps(ScreenRect(hud.CameraPanelRect,camera)),"name entry does not overlap camera card");
+                var identity=hud.PlayerNameInput.transform.parent as RectTransform;var roomEntry=hud.RoomCodeInput.transform.parent as RectTransform;
+                check(identity!=roomEntry&&!ScreenRect(identity,camera).Overlaps(ScreenRect(roomEntry,camera)),"name and room entry are visibly separate groups");
+                Inside(identity,safe,camera,check,prefix+" identity card");Inside(roomEntry,safe,camera,check,prefix+" room entry card");
                 check(hud.CameraPreview.uvRect==new Rect(1,0,-1,1)&&hud.CameraPreview.rectTransform.localScale==Vector3.one&&Quaternion.Angle(hud.CameraPreview.rectTransform.localRotation,Quaternion.identity)<.01f,"local preview applies exactly one horizontal UV mirror without transform rotation/flip");
                 check(hud.CameraSetupButton.GetComponentInChildren<Text>().text=="Camera settings","enabled home camera is not another enable/off step");
                 bool runningBeforeSettings=face.Running;Tap(hud.CameraSetupButton,raycaster,camera);Tick(hud);
@@ -201,6 +205,10 @@ public static class StareMobileUiChecks
                     check(left.b>left.g&&right.g>right.b,"rendered preview is mirrored once from canonical pixels");
                 }
                 finally{UnityEngine.Object.DestroyImmediate(home);}
+
+                hud.PlayerNameInput.SetTextWithoutNotify("");hud.RoomCodeInput.SetTextWithoutNotify("");Tick(hud);Canvas.ForceUpdateCanvases();
+                var firstVisit=Capture(camera,target,Path.Combine(outputFolder,prefix+"-home-new-player.png"));UnityEngine.Object.DestroyImmediate(firstVisit);
+                hud.PlayerNameInput.SetTextWithoutNotify("Existing Pilot");hud.RoomCodeInput.SetTextWithoutNotify("1234");Tick(hud);
 
                 Tap(hud.SettingsButton,raycaster,camera);Tick(hud);Canvas.ForceUpdateCanvases();check(hud.SettingsVisible,"Settings opens through real graphic raycast");
                 Inside(hud.SettingsPanelRect,safe,camera,check,prefix+" Settings panel");
@@ -265,7 +273,7 @@ public static class StareMobileUiChecks
                 }
                 session.Leave();camera.targetTexture=oldTarget;target.Release();UnityEngine.Object.DestroyImmediate(target);target=null;
             }
-            return count+" phone UI/name/settings/orientation checks passed; fourteen 2x-MSAA PNGs saved in "+Path.GetFullPath(outputFolder);
+            return count+" phone UI/name/settings/orientation checks passed; sixteen 2x-MSAA PNGs saved in "+Path.GetFullPath(outputFolder);
         }
         finally
         {
