@@ -55,6 +55,7 @@ namespace Staredown
     {
         public static readonly Color Cyan = new Color(.12f, .88f, 1), Coral = new Color(1, .31f, .13f), Violet = new Color(.65f, .32f, 1), Gold = new Color(1, .76f, .25f);
         readonly Dictionary<int, CreatureView> avatars = new Dictionary<int, CreatureView>();
+        readonly HashSet<int> currentContestants=new HashSet<int>();readonly List<int> departedContestants=new List<int>();
         readonly Dictionary<int, GameObject> balls = new Dictionary<int, GameObject>();
         readonly Dictionary<string, Material> materials = new Dictionary<string, Material>();
         public TextMesh headline, subline, boardLeft, boardRight, lobbyStatus, ipText, hud, roundText;
@@ -124,6 +125,9 @@ namespace Staredown
         public CreatureView AvatarFor(int id){CreatureView avatar;return avatars.TryGetValue(id,out avatar)?avatar:null;}
         public void UpdateState(ArenaState s,int localId,bool broadcast)
         {
+            currentContestants.Clear();foreach(var fighter in s.fighters)currentContestants.Add(fighter.id);
+            departedContestants.Clear();foreach(var item in avatars)if(!currentContestants.Contains(item.Key))departedContestants.Add(item.Key);
+            foreach(int id in departedContestants){Destroy(avatars[id].root.gameObject);avatars.Remove(id);}
             UpdatePads(s);
             foreach(var f in s.fighters)
             {
@@ -162,7 +166,6 @@ namespace Staredown
                     }
                 }
             }
-            foreach(var kv in avatars) if(!s.fighters.Any(f=>f.id==kv.Key)) kv.Value.root.gameObject.SetActive(false);
             var lastChampion=s.phase==(int)MatchPhase.Lobby?System.Array.Find(s.fighters,f=>f.id==s.winner):null;
             headline.text=s.phase==(int)MatchPhase.Lobby?(lastChampion==null?"S T A R E D O W N":lastChampion.DisplayName+" / CHAMPION"):s.announcement;
             if(headline.text.Length>35) headline.characterSize=.072f;else headline.characterSize=.13f;

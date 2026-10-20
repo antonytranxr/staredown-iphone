@@ -1,0 +1,15 @@
+{
+  "StareCameraPackets_Encode": [
+    "Assembly-CSharp__1.cpp",
+    "Assembly-CSharp__4.cpp"
+  ],
+  "StareCameraPackets": [
+    "Assembly-CSharp__1.cpp",
+    "Assembly-CSharp__4.cpp"
+  ],
+  "Assembler_Add": [
+    "Assembly-CSharp__1.cpp",
+    "Assembly-CSharp__4.cpp"
+  ],
+  "get_PacketVideoPeers": []
+}

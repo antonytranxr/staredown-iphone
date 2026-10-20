@@ -127,10 +127,12 @@ namespace Staredown
                 for(int i=0;i<originals.Length;i++){var original=originals[i];string key="Unlock skin "+skin+" / "+original.GetInstanceID();Material variant;if(!materials.TryGetValue(key,out variant)){variant=new Material(original);if(variant.HasProperty("_Color"))variant.color=Color.Lerp(original.color,tint[skin],.58f);if(variant.HasProperty("_Metallic"))variant.SetFloat("_Metallic",skin==2?.55f:.22f);materials[key]=variant;}variants[i]=variant;}renderer.sharedMaterials=variants;
             }
         }
+        Mesh humanMarkerMesh;
         Transform BuildHumanMarker(Transform parent)
         {
-            var node=Group("Human player diamond",parent,Vector3.zero);var mesh=new Mesh{name="Shared human identity diamond"};
-            artMeshes.Add(mesh);mesh.vertices=new[]{Vector3.up*.18f,Vector3.down*.18f,Vector3.left*.085f,Vector3.forward*.085f,Vector3.right*.085f,Vector3.back*.085f};mesh.triangles=new[]{0,2,3,0,3,4,0,4,5,0,5,2,1,3,2,1,4,3,1,5,4,1,2,5};mesh.RecalculateNormals();node.gameObject.AddComponent<MeshFilter>().sharedMesh=mesh;node.gameObject.AddComponent<MeshRenderer>().sharedMaterial=Mat("Human identity lime",new Color(.42f,1,.28f),true);return node;
+            var node=Group("Human player diamond",parent,Vector3.zero);var mesh=humanMarkerMesh;
+            if(mesh==null){mesh=humanMarkerMesh=new Mesh{name="Shared human identity diamond"};
+            artMeshes.Add(mesh);mesh.vertices=new[]{Vector3.up*.18f,Vector3.down*.18f,Vector3.left*.085f,Vector3.forward*.085f,Vector3.right*.085f,Vector3.back*.085f};mesh.triangles=new[]{0,2,3,0,3,4,0,4,5,0,5,2,1,3,2,1,4,3,1,5,4,1,2,5};mesh.RecalculateNormals();}node.gameObject.AddComponent<MeshFilter>().sharedMesh=mesh;node.gameObject.AddComponent<MeshRenderer>().sharedMaterial=Mat("Human identity lime",new Color(.42f,1,.28f),true);return node;
         }
         void AddContestantLODs(Transform model,Transform root,string asset)
         {

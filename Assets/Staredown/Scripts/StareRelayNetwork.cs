@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,11 +22,11 @@ namespace Staredown
  public sealed class StareRelayNetwork : IStareTransport
  {
   const int MaxPacket=65536;
-  sealed class Peer { public NetworkConnection connection; public readonly Queue<byte[]> queue=new Queue<byte[]>(); public byte[] snapshot, input; public readonly Dictionary<int,byte[]> cameraFrames=new Dictionary<int,byte[]>(); public readonly Queue<int> cameraOrder=new Queue<int>(); }
+  sealed class Peer { public NetworkConnection connection; public readonly Queue<byte[]> queue=new Queue<byte[]>(); public byte[] snapshot, input; public readonly Dictionary<int,StareCameraPackets.Frame> cameraFrames=new Dictionary<int,StareCameraPackets.Frame>();public bool packetVideo;public readonly StareCameraPackets.Assembler assembler=new StareCameraPackets.Assembler(); public readonly Queue<int> cameraOrder=new Queue<int>(); }
   readonly Dictionary<int,Peer> peers=new Dictionary<int,Peer>();
   readonly Queue<StareNetwork.Incoming> inbox=new Queue<StareNetwork.Incoming>();
   readonly List<int> peerIds=new List<int>();
-  NetworkDriver driver;NetworkPipeline pipeline,cameraPipeline;bool disposed,hosting,connected,hasRelay;int nextId;
+  NetworkDriver driver;NetworkPipeline pipeline,cameraPipeline,packetCameraPipeline;bool disposed,hosting,connected,hasRelay;int nextId;
   float started;static Task services;
   string directoryId;float heartbeatAt,directoryUpdateAt;Task heartbeat,directoryUpdate;
   bool roomOpen=true,publishedOpen=true;
@@ -36,6 +37,9 @@ namespace Staredown
   public string RoomCode {get;private set;}
   public string VoiceKey {get;private set;}
   public string Error {get;private set;}
+  public int CameraDatagramsSent {get;private set;}
+  public int CameraDatagramsReceived {get;private set;}
+  public int PacketVideoPeers=>peers.Values.Count(x=>x.packetVideo);
   public int CameraFramesSent {get;private set;}
   public int CameraFramesReceived {get;private set;}
   public int CameraFramesReplaced {get;private set;}
@@ -43,7 +47,7 @@ namespace Staredown
   public int ReliablePacketsSent {get;private set;}
   public int ReliablePacketsReceived {get;private set;}
   public int LastCameraSendError {get;private set;}
-  public string TransportDiagnostics=>"peers="+peers.Count+" reliable TX/RX="+ReliablePacketsSent+"/"+ReliablePacketsReceived+" camera TX/RX="+CameraFramesSent+"/"+CameraFramesReceived+" replaced="+CameraFramesReplaced+" discarded="+CameraFramesDiscarded+" camera send error="+LastCameraSendError;
+  public string TransportDiagnostics=>"peers="+peers.Count+" packetVideoPeers="+PacketVideoPeers+" datagrams TX/RX="+CameraDatagramsSent+"/"+CameraDatagramsReceived+" reliable TX/RX="+ReliablePacketsSent+"/"+ReliablePacketsReceived+" camera TX/RX="+CameraFramesSent+"/"+CameraFramesReceived+" replaced="+CameraFramesReplaced+" discarded="+CameraFramesDiscarded+" camera send error="+LastCameraSendError;
   public bool Bound => driver.IsCreated && (!hasRelay||driver.GetRelayConnectionStatus()==RelayConnectionStatus.Established);
   public static string NormalizeCode(string code)=> (code??"").Trim();
   public static bool ValidCode(string code){code=NormalizeCode(code);if(code.Length!=CodeLength)return false;foreach(char c in code)if(c<'0'||c>'9')return false;return true;}
@@ -157,9 +161,10 @@ namespace Staredown
   }
 #if UNITY_EDITOR
   // Exercises the identical framing/pipeline without depending on cloud services.
-  public void TestLocal(bool host,ushort port)
+  bool testSimulator;
+  public void TestLocal(bool host,ushort port,int delayMs=0,int jitterMs=0,int dropPercent=0,uint seed=1)
   {
-   hosting=host;started=Time.realtimeSinceStartup;var settings=Settings();driver=NetworkDriver.Create(settings);settings.Dispose();
+   hosting=host;started=Time.realtimeSinceStartup;var settings=Settings();testSimulator=delayMs>0||jitterMs>0||dropPercent>0;if(testSimulator)settings.WithSimulatorStageParameters(maxPacketCount:256,maxPacketSize:1500,mode:ApplyMode.SentPacketsOnly,packetDelayMs:delayMs,packetJitterMs:jitterMs,packetDropPercentage:dropPercent,randomSeed:seed);driver=NetworkDriver.Create(settings);settings.Dispose();
    CreatePipelines();
    if(driver.Bind(host?NetworkEndpoint.AnyIpv4.WithPort(port):NetworkEndpoint.AnyIpv4)!=0)throw new Exception("Test bind failed");
    if(host)driver.Listen();else peers.Add(0,new Peer{connection=driver.Connect(NetworkEndpoint.LoopbackIpv4.WithPort(port))});
@@ -167,13 +172,17 @@ namespace Staredown
 #endif
   void CreatePipelines()
   {
+#if UNITY_EDITOR
+   if(testSimulator){pipeline=driver.CreatePipeline(typeof(FragmentationPipelineStage),typeof(ReliableSequencedPipelineStage),typeof(SimulatorPipelineStage));cameraPipeline=driver.CreatePipeline(typeof(FragmentationPipelineStage),typeof(UnreliableSequencedPipelineStage),typeof(SimulatorPipelineStage));packetCameraPipeline=driver.CreatePipeline(typeof(SimulatorPipelineStage));return;}
+#endif
    // Creation order is part of the cross-platform room protocol. A dropped
    // preview frame must never hold up a blink, countdown or room snapshot.
    pipeline=driver.CreatePipeline(typeof(FragmentationPipelineStage),typeof(ReliableSequencedPipelineStage));
-   cameraPipeline=driver.CreatePipeline(typeof(FragmentationPipelineStage),typeof(UnreliableSequencedPipelineStage));
+   cameraPipeline=driver.CreatePipeline(typeof(FragmentationPipelineStage),typeof(UnreliableSequencedPipelineStage));packetCameraPipeline=NetworkPipeline.Null;
   }
   void Enqueue(int id,string json){if(inbox.Count<512)inbox.Enqueue(new StareNetwork.Incoming{sender=id,json=json});else ClosePeer(id);}
-  void Event(int id,string kind)=>Enqueue(id,"{\"kind\":\""+kind+"\"}");
+  void Event(int id,string kind)
+  {Enqueue(id,"{\"kind\":\""+kind+"\"}");if(kind=="connected"&&id>=0)Send(id,new WireMessage{kind="videoCapabilities",videoProtocol=StareCameraPackets.Version});}
   public void Tick()
   {
    if(disposed||!driver.IsCreated)return;
@@ -201,9 +210,14 @@ namespace Staredown
      else if(type==NetworkEvent.Type.Disconnect){Error=hosting?"PLAYER DISCONNECTED":"HOST LEFT OR CONNECTION LOST";peers.Remove(id);Event(id,"disconnected");break;}
      else if(type==NetworkEvent.Type.Data)
      {
-      bool preview=receivedPipeline.Equals(cameraPipeline);
-      if(reader.Length<=0||reader.Length>(preview||hosting?8192:MaxPacket)){ClosePeer(id);Event(id,"disconnected");break;}
-      var bytes=new byte[reader.Length];reader.ReadBytes(bytes.AsSpan());string json=Encoding.UTF8.GetString(bytes);
+      bool packetVideo=receivedPipeline.Equals(packetCameraPipeline),preview=receivedPipeline.Equals(cameraPipeline);
+      if(reader.Length<=0||reader.Length>(packetVideo?StareCameraPackets.Header+StareCameraPackets.Payload:preview||hosting?8192:MaxPacket)){ClosePeer(id);Event(id,"disconnected");break;}
+      var bytes=new byte[reader.Length];reader.ReadBytes(bytes.AsSpan());
+      if(packetVideo)
+      {CameraDatagramsReceived++;WireMessage frame;if(peer.assembler.Add(bytes,Time.realtimeSinceStartupAsDouble,out frame)){CameraFramesReceived++;Enqueue(id,JsonUtility.ToJson(frame));}continue;}
+      string json=Encoding.UTF8.GetString(bytes);
+      if(!preview&&json.Contains("videoCapabilities"))
+      {WireMessage capabilities=null;try{capabilities=JsonUtility.FromJson<WireMessage>(json);}catch{}if(capabilities!=null&&capabilities.kind=="videoCapabilities"){peer.packetVideo=capabilities.videoProtocol==StareCameraPackets.Version;continue;}}
       if(preview)
       {
        WireMessage frame;try{frame=JsonUtility.FromJson<WireMessage>(json);}catch{CameraFramesDiscarded++;continue;}
@@ -230,29 +244,45 @@ namespace Staredown
     if(peer.queue.Count>0)peer.queue.Dequeue();else if(peer.input!=null)peer.input=null;else peer.snapshot=null;
    }
    if(peer.queue.Count>0||peer.input!=null||peer.snapshot!=null)return;
-   // At most two latest frames per peer per tick, after all gameplay traffic.
+   // Bounded latest-frame queues. Video never blocks reliable game traffic.
    for(int n=0;n<2&&peer.cameraOrder.Count>0;n++)
    {
-    int origin=peer.cameraOrder.Peek();byte[] bytes;
-    if(!peer.cameraFrames.TryGetValue(origin,out bytes)){peer.cameraOrder.Dequeue();continue;}
-    int begin=driver.BeginSend(cameraPipeline,peer.connection,out var writer,bytes.Length);
-    if(begin!=0){LastCameraSendError=begin;return;}
-    if(!writer.WriteBytes(bytes.AsSpan())){driver.AbortSend(writer);return;}
-    int result=driver.EndSend(writer);if(result<0){LastCameraSendError=result;return;}
-    LastCameraSendError=0;CameraFramesSent++;
-    peer.cameraOrder.Dequeue();peer.cameraFrames.Remove(origin);
+    int origin=peer.cameraOrder.Peek();StareCameraPackets.Frame frame;
+    if(!peer.cameraFrames.TryGetValue(origin,out frame)){peer.cameraOrder.Dequeue();continue;}
+    if(peer.packetVideo)
+    {
+     bool sent=true;foreach(byte[] packet in frame.packets)
+     {
+      int begin=driver.BeginSend(packetCameraPipeline,peer.connection,out var writer,packet.Length);
+      if(begin!=0){LastCameraSendError=begin;sent=false;break;}
+      if(!writer.WriteBytes(packet.AsSpan())){driver.AbortSend(writer);sent=false;break;}
+      int result=driver.EndSend(writer);if(result<0){LastCameraSendError=result;sent=false;break;}CameraDatagramsSent++;
+     }
+     if(!sent)return;
+    }
+    else
+    {
+     // Preserve interoperability with 1.1.5/1.18.3 clients. Only mutually
+     // advertised peers use packet video; older peers keep their old pipeline.
+     var legacy=new WireMessage{kind="cameraFrame",id=frame.origin,cameraSequence=frame.sequence,cameraFrame=Convert.ToBase64String(Join(frame))};var bytes=Encoding.UTF8.GetBytes(JsonUtility.ToJson(legacy));
+     int begin=driver.BeginSend(cameraPipeline,peer.connection,out var writer,bytes.Length);if(begin!=0){LastCameraSendError=begin;return;}
+     if(!writer.WriteBytes(bytes.AsSpan())){driver.AbortSend(writer);return;}int result=driver.EndSend(writer);if(result<0){LastCameraSendError=result;return;}
+    }
+    LastCameraSendError=0;CameraFramesSent++;peer.cameraOrder.Dequeue();peer.cameraFrames.Remove(origin);
    }
   }
+  static byte[] Join(StareCameraPackets.Frame frame)
+  {int length=0;foreach(var packet in frame.packets)length+=packet.Length-StareCameraPackets.Header;var jpeg=new byte[length];int offset=0;foreach(var packet in frame.packets){int count=packet.Length-StareCameraPackets.Header;Buffer.BlockCopy(packet,StareCameraPackets.Header,jpeg,offset,count);offset+=count;}return jpeg;}
   public bool Poll(out StareNetwork.Incoming packet){if(inbox.Count==0){packet=default;return false;}packet=inbox.Dequeue();return true;}
-  void Queue(int id,Peer peer,WireMessage message,byte[] bytes)
+  void Queue(int id,Peer peer,WireMessage message,byte[] bytes,StareCameraPackets.Frame camera=null)
   {
    if(message.kind=="cameraFrame")
    {
-    if(bytes.Length>StareCameraFrameValidation.MaxJson||message.id<0)return;
+    if(camera==null||message.id<0)return;
     if(!peer.cameraFrames.ContainsKey(message.id))
     {if(peer.cameraFrames.Count>=Tournament.Capacity)return;peer.cameraOrder.Enqueue(message.id);}
     else CameraFramesReplaced++;
-    peer.cameraFrames[message.id]=bytes;
+    peer.cameraFrames[message.id]=camera;
    }
    else if(message.kind=="state")peer.snapshot=bytes;
    else if(message.kind=="input")peer.input=bytes;
@@ -261,12 +291,12 @@ namespace Staredown
   public void Send(int target,WireMessage message)
   {
    if(!peers.TryGetValue(target,out var peer))return;
-   byte[] bytes=Encoding.UTF8.GetBytes(JsonUtility.ToJson(message));if(bytes.Length<=MaxPacket)Queue(target,peer,message,bytes);
+   var camera=message.kind=="cameraFrame"?StareCameraPackets.Encode(message):null;byte[] bytes=camera!=null?Array.Empty<byte>():Encoding.UTF8.GetBytes(JsonUtility.ToJson(message));if(bytes.Length<=MaxPacket)Queue(target,peer,message,bytes,camera);
   }
   public void Broadcast(WireMessage message)
   {
-   byte[] bytes=Encoding.UTF8.GetBytes(JsonUtility.ToJson(message));if(bytes.Length>MaxPacket)return;
-   peerIds.Clear();peerIds.AddRange(peers.Keys);foreach(int id in peerIds)if(peers.TryGetValue(id,out var peer))Queue(id,peer,message,bytes);
+   var camera=message.kind=="cameraFrame"?StareCameraPackets.Encode(message):null;byte[] bytes=camera!=null?Array.Empty<byte>():Encoding.UTF8.GetBytes(JsonUtility.ToJson(message));if(bytes.Length>MaxPacket)return;
+   peerIds.Clear();peerIds.AddRange(peers.Keys);foreach(int id in peerIds)if(peers.TryGetValue(id,out var peer))Queue(id,peer,message,bytes,camera);
   }
   public void ClosePeer(int id){if(peers.TryGetValue(id,out var p)){if(driver.IsCreated)driver.Disconnect(p.connection);peers.Remove(id);}}
   public void Dispose(){disposed=true;if(driver.IsCreated){foreach(var p in peers.Values)driver.Disconnect(p.connection);driver.ScheduleUpdate().Complete();driver.Dispose();}peers.Clear();inbox.Clear();RoomCode=null;if(directoryId!=null){string id=directoryId;directoryId=null;_=DeleteDirectory(id);}}

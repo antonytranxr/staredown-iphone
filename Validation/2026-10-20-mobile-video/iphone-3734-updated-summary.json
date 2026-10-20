@@ -1,0 +1,13 @@
+{
+  "duration": 40.14738258300349,
+  "frames": 227,
+  "sequenceAdvance": 240,
+  "rxFrames": 240,
+  "maxGap": 0.4706362499855459,
+  "p95Gap": 0.33333879098063335,
+  "receiverFPS": 29.9898567,
+  "status": "complete",
+  "configuration": "updated iPhone client -> Editor host, packet video 2; baseline iPhone host -> Editor client, legacy video",
+  "receivedFPS": 5.654166857096709,
+  "transportFPS": 5.977973769617666
+}

@@ -1,0 +1,11 @@
+{
+  "duration": 40.21337700000731,
+  "frames": 143,
+  "sequenceAdvance": 236,
+  "rxFrames": 143,
+  "maxGap": 1.0651880000368692,
+  "p95Gap": 0.7329085840028711,
+  "receiverFPS": 29.9860439,
+  "status": "complete",
+  "receivedFPS": 3.556030621352044
+}

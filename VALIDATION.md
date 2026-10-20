@@ -1,3 +1,13 @@
+# Video delivery diagnostics — 2026-10-20
+
+Candidate phone **1.1.6 (9)** uses capability-negotiated, independently framed video packets, avoiding UTP fragment ordering losses. Old peers retain legacy video and room v8 compatibility. Both endpoints need updated builds for the repaired delivery path. Departed contestant roots are released and human markers reuse one mesh.
+
+Physical baseline: an iPhone 12 Pro on 1.1.5 (8) sent video into an actual Relay room. A receiving Editor client measured 143 video frames in 40.21 seconds (3.56 FPS), despite the source sequence advancing 236 frames. Longest receive gap was 1.07 seconds; the receiver's game stayed near 30 FPS. This demonstrates remote stream loss/choppiness. It does not measure native blink recall, sender GPU time, sustained heat or four-person audibility. Shared video remains capped at six FPS independently of eye sampling.
+
+Two synthetic stress runs passed all four scenarios, with four concurrent JPEG origins, real local UTP, delayed/jittered/lossy packets, camera pause/recovery and twelve roster churn cycles each. Maximum unplanned video gap stayed below 0.80 seconds; baseline impaired-network gaps reached 6.23 seconds. Avatar count stayed bounded at sixteen and returned to zero after leaving. Seventeen packet checks, 33 protocol checks, 36 captured-blink checks, 16 camera transport checks and bidirectional legacy fallback passed. Editor timing is not physical phone FPS.
+
+Unity 6000.3.26f1 exported 1.1.6 (9) with zero errors and three warnings. All 33 native scene/bridge/export checks pass; generated IL2CPP includes the new packet encoder and assembler. Native development signing succeeded and 1.1.6 (9) was installed on the connected iPhone. The post-install 40.15-second Relay run received 240 transport frames across 240 source sequence advances; host rate limiting displayed 227 (5.65 FPS), with a longest gap of 0.47 seconds. The baseline had different host/client roles; this is a practical follow-up rather than a controlled benchmark. The matching Quest 1.18.4 (38) is installed. No TestFlight upload was produced. Reports: `Validation/2026-10-20-mobile-video/`.
+
 # Crossplay reliability — 2026-10-19
 
 Phone 1.1.5 build 8 pairs with Quest 1.18.3. Mobile losing blinks now carry capture-time eligibility, match/round/duel scope and a retried host acknowledgement rather than depending on the latest face pose. The phone now renders its own body and live camera head in the mirror while excluding its housing from first person. Voice is room-wide for this test, with output gain/mute recovery, output-device observers, receive activity and a reconnect control.
