@@ -40,7 +40,7 @@ public static class StareCameraChecks
   var padded=Frame(1,1,jpeg);padded.name=new string('X',8192);
   Check(!StareCameraFrameValidation.Decode(padded,out decoded),"unexpected JSON fields cannot exceed packet budget");
   var hostObject=new GameObject("Camera protocol host fixture");var stream=hostObject.AddComponent<StareCameraStream>();var net=new CaptureTransport();
-  var t=new Tournament();t.Add(0,"HOST");t.Add(1,"PHONE");t.Add(2,"BOT",true);t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0);
+  var t=new Tournament(1);t.Add(0,"HOST");t.Add(1,"PHONE");t.Add(2,"BOT",true);t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0);
   try
   {
    stream.Handle(Frame(1,1,jpeg),1,t,net,0);Check(stream.AcceptedFrames==0,"frame without host-granted camera profile rejected");
@@ -159,7 +159,7 @@ public static class StareCameraChecks
     return input&&frame;
    },15,"client camera and gameplay",()=>"input="+input+" frame="+frame+" received="+frameCount+" emitted bursts="+burst);
    Check(input&&frame&&frameCount<=burst,"single gameplay input and whole coalesced camera frame arrive without camera retransmission blocking gameplay");
-   var t=new Tournament();for(int i=0;i<Tournament.Capacity;i++)t.Add(i,"CONTENDER "+i,true);
+   var t=new Tournament(1);for(int i=0;i<Tournament.Capacity;i++)t.Add(i,"CONTENDER "+i,true);
    host.Broadcast(new WireMessage{kind="state",state=t.Snapshot()});
    int originBase=burst*20+1;
    host.Broadcast(Frame(ids[0],originBase,jpeg));host.Broadcast(Frame(ids[1],12,jpeg));host.Broadcast(Frame(ids[0],originBase+1,jpeg));

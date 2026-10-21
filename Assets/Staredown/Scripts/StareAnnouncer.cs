@@ -38,19 +38,30 @@ namespace Staredown
     {
         readonly StareAnnouncerCues cues=new StareAnnouncerCues();
         readonly Dictionary<string,AudioClip> clips=new Dictionary<string,AudioClip>();
-        AudioSource voice; StareGame game;float eliminationAt;
+        AudioSource voice; StareGame game;StareMobileSession phone;float eliminationAt;
         public bool IsSpeaking=>voice!=null&&voice.isPlaying;
+        public float VoiceVolume=>voice!=null?voice.volume:.82f;
+        public bool VoiceMuted=>voice!=null&&voice.mute;
         public string LastCue {get;private set;}="";
         void Start()
         {
             game=GetComponent<StareGame>();
+            PrepareVoice();
+        }
+        public void Initialize(StareMobileSession session)
+        {phone=session;PrepareVoice();}
+        void PrepareVoice()
+        {
+            if(voice!=null)return;
             foreach(var clip in Resources.LoadAll<AudioClip>("Audio/Announcer"))clips[clip.name]=clip;
             voice=gameObject.AddComponent<AudioSource>();voice.playOnAwake=false;voice.spatialBlend=0;
-            voice.volume=.82f;voice.priority=16;
+            // Music preferences affect only the music source. Instructions and
+            // round cues use a separate voice channel on both Quest and phones.
+            voice.volume=.82f;voice.priority=16;voice.mute=false;
         }
         void Update()
         {
-            string cue=cues.Next(game!=null?game.State:null);if(StareTutorialVideo.Presenting){if(voice!=null&&voice.isPlaying)voice.Stop();return;}if(cue==null)return;
+            string cue=cues.Next(phone!=null?phone.State:game!=null?game.State:null);if(StareTutorialVideo.Presenting){if(voice!=null&&voice.isPlaying)voice.Stop();return;}if(cue==null)return;
             if(cue=="Eliminated")
             {
                 if(IsSpeaking||Time.unscaledTime<eliminationAt)return;

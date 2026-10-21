@@ -1,0 +1,27 @@
+{
+  "questVersion": "1.19.0",
+  "questBuild": 40,
+  "iphoneVersion": "1.1.9",
+  "iphoneBuild": "12",
+  "touchAndSharedFeedbackChecks": 18,
+  "voiceLifecycleMockChecks": {
+    "iOS": 54,
+    "Android": 54
+  },
+  "visualReview": "18 portrait/landscape screenshots; reduced close-up slingshot trajectory width to .004m after review",
+  "mirrorTargetHz": {
+    "Quest": 24,
+    "iPhone": 15
+  },
+  "mirrorFallbackHz": {
+    "Quest": 12,
+    "iPhone": 6,
+    "hotIPhone": 3
+  },
+  "nativeLimitations": [
+    "Affected Quest not connected; microphone root cause and two-way native audio unconfirmed",
+    "Mirror frame budgets and thermal behavior tested synthetically; sustained device frame rate still needs verification",
+    "TestFlight upload not performed"
+  ],
+  "editorKnownError": "StopSubsystems without initialized manager during non-XR desktop test teardown; no new gameplay/compile errors observed"
+}

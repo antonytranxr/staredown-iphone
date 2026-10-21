@@ -1,0 +1,11 @@
+[
+  "lives: 122 lives, opponent rotation, championship persistence, phone consent and scoreboard rule checks passed",
+  "privacy: 16 video sharing/authentication/eye tracking/queue privacy checks passed",
+  "phoneRules: 39 phone room rules checks passed",
+  "mobileCountdown: 216 uninterrupted mobile countdown/grace/identity/eye status checks passed",
+  "countdown: 205 countdown checks passed",
+  "capturedBlinks: 36 captured blink authority/delivery/compatibility checks passed",
+  "phonePause: 20 paused phone and event-order checks passed",
+  "videoPackets: 17 video packet reorder/duplicate/loss/expiry/bounds checks passed",
+  "videoProtocol: 33 camera protocol checks passed"
+]

@@ -46,6 +46,8 @@ namespace Staredown
     pending.Remove(key);int width,height;if(!StareCameraFrameValidation.Jpeg(part.jpeg,out width,out height)){Dropped++;return false;}
     message=new WireMessage{kind="cameraFrame",id=origin,cameraSequence=seq,cameraFrame=Convert.ToBase64String(part.jpeg)};return true;
    }
+   public void ClearOrigin(int origin)
+   {expired.Clear();foreach(var item in pending)if(item.Value.origin==origin)expired.Add(item.Key);foreach(long key in expired)pending.Remove(key);expired.Clear();}
    public void Clear(){pending.Clear();expired.Clear();}
   }
  }

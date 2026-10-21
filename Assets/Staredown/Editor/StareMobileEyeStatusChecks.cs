@@ -7,7 +7,7 @@ using Staredown;
 public static class StareMobileEyeStatusChecks
 {
  static int n;static void Check(bool ok,string label){if(!ok)throw new Exception("Mobile eye status: "+label);n++;}
- static Tournament Room(int count=2){var t=new Tournament();for(int id=0;id<count;id++){t.Add(id,"Player "+id).phoneCamera=id==0;t.Input(id,0,0,true,true,0,0,0);}Check(t.Start(),"calibrated room starts");return t;}
+ static Tournament Room(int count=2){var t=new Tournament(1);for(int id=0;id<count;id++){t.Add(id,"Player "+id).phoneCamera=id==0;t.Input(id,0,0,true,true,0,0,0);}Check(t.Start(),"calibrated room starts");return t;}
  static void Step(Tournament t,float dt,bool lost){foreach(var f in t.Fighters)t.Input(f.id,0,0,!(lost&&f.id==0),true,0,0,0);t.Tick(dt);}
  public static string Rules()
  {
@@ -19,7 +19,7 @@ public static class StareMobileEyeStatusChecks
   Step(t,.2f,false);Check(t.Find(0).faceMissingFor==0&&t.Duel==1&&t.Round==round,"recovery clears grace without restarting the duel");
   Step(t,.6f,true);Step(t,.45f,true);Check(!t.Find(0).alive&&t.Find(0).status.StartsWith("FACE LOST"),"sustained tracking loss forfeits phone only");Check(t.Phase==MatchPhase.Duel&&t.Round==round&&!t.TrackingPaused,"another duel keeps going without reset");
   t=Room(4);while(t.Phase==MatchPhase.Countdown)Step(t,.05f,false);foreach(var pair in t.Pairs){int loser=pair.a==0?pair.b:pair.a;t.Blink(loser);}Step(t,.1f,false);Check(t.Find(0).alive&&t.Phase==MatchPhase.Intermission,"phone advances to next round");t.Find(0).phoneCamera=false;Step(t,4.1f,false);Check(t.Phase==MatchPhase.Countdown&&t.Find(0).phoneTrackingRequired,"camera-off cannot change phone into headset between rounds");Step(t,.1f,true);Check(!t.TrackingPaused,"disabled camera cannot freeze next round countdown");
-  var off=new Tournament();off.Add(0,"Phone");off.Add(1,"Headset");off.Input(0,0,0,true,true,0,0,0,false,true);off.Input(1,0,0,true,true,0,0,0);Check(off.Start()&&off.Find(0).phoneTrackingRequired,"phone capability survives video profile switching at admission");Step(off,.1f,true);Check(!off.TrackingPaused,"admission race cannot make missing phone tracking pause the countdown");
+  var off=new Tournament(1);off.Add(0,"Phone");off.Add(1,"Headset");off.Input(0,0,0,true,true,0,0,0,false,true);off.Input(1,0,0,true,true,0,0,0);Check(off.Start()&&off.Find(0).phoneTrackingRequired,"phone capability survives video profile switching at admission");Step(off,.1f,true);Check(!off.TrackingPaused,"admission race cannot make missing phone tracking pause the countdown");
   Check(StareMobileHud.EyeLabel(false,0)=="LOST","invalid tracking cannot show open eyes");Check(StareMobileHud.EyeLabel(true,0)=="OPEN"&&StareMobileHud.EyeLabel(true,.45f)=="CLOSING"&&StareMobileHud.EyeLabel(true,.8f)=="CLOSED","eye indicators use real closure thresholds");
   return n+" uninterrupted mobile countdown/grace/identity/eye status checks passed";
  }

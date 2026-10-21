@@ -1,0 +1,37 @@
+{
+  "info" : {
+    "arguments" : [
+      "devicectl",
+      "device",
+      "install",
+      "app",
+      "--device",
+      "CD82FA55-EAD7-4E39-9554-649DC1D0103C",
+      "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/work/Staredown-iOS-DerivedData/Build/Products/Debug-iphoneos/StaredownMobile.app",
+      "--json-output",
+      "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/work/crossplay-polish/iphone-install.json"
+    ],
+    "commandType" : "devicectl.device.install.app",
+    "environment" : {
+      "TERM" : "dumb"
+    },
+    "jsonVersion" : 2,
+    "outcome" : "success",
+    "version" : "397.28"
+  },
+  "result" : {
+    "deviceIdentifier" : "CD82FA55-EAD7-4E39-9554-649DC1D0103C",
+    "installedApplications" : [
+      {
+        "bundleID" : "com.antony.staredown.mobile",
+        "databaseSequenceNumber" : 6320,
+        "databaseUUID" : "228BD007-B254-4F19-9D66-DC0E835C8E2E",
+        "installationURL" : "file:///private/var/containers/Bundle/Application/3895B3A9-3AFD-404E-B095-40DF9AB7D2BB/StaredownMobile.app/",
+        "launchServicesIdentifier" : "unknown",
+        "options" : {
+
+        }
+      }
+    ]
+  }
+}

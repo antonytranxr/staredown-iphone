@@ -11,7 +11,7 @@ public static class StarePausedPhoneChecks
  static void Check(bool value,string label){if(!value)throw new Exception("Paused phone: "+label);checks++;}
  static Tournament Duel(int players=4)
  {
-  var room=new Tournament();
+  var room=new Tournament(1);
   for(int i=0;i<players;i++){room.Add(i,"PLAYER "+i);room.Input(i,0,0,true,true,0,0,0);}
   room.Find(0).phoneCamera=true;Check(room.Start(),"room admitted calibrated competitors");
   for(int i=0;i<250&&room.Phase==MatchPhase.Countdown;i++){Feed(room);room.Tick(.025f);}

@@ -15,7 +15,7 @@ public static class StareRoomPhoneChecks
 
  static Tournament ReadyRoom(int count,params int[] phones)
  {
-  var tournament=new Tournament();
+  var tournament=new Tournament(1);
   for(int id=0;id<count;id++)
   {var fighter=tournament.Add(id,"HUMAN "+id);fighter.phoneCamera=phones.Contains(id);tournament.Input(id,0,0,true,true,0,0,0);}
   Check(tournament.Start(),"calibrated humans enter a match");
@@ -66,7 +66,8 @@ public static class StareRoomPhoneChecks
 
   var off=ReadyRoom(2,0);ReachDuel(off);off.Find(0).phoneCamera=false;
   Step(off,Tournament.PhoneFaceLossGrace+.2f);
-  Check(off.Find(0).phoneTrackingRequired&&!off.Find(0).alive&&off.Pairs[0].winner==1,"turning video off mid-round cannot evade the latched camera requirement");
+  Check(off.Find(0).phoneTrackingRequired&&off.Find(0).alive&&off.Find(0).faceMissingFor==0,"turning video off preserves private eye tracking without a forfeit");
+  Step(off,Tournament.PhoneFaceLossGrace+.2f,new[]{0});Check(!off.Find(0).alive&&off.Pairs[0].winner==1,"private-video phone still forfeits if its eyes leave the camera");
 
   var stale=ReadyRoom(2,0);ReachDuel(stale);
   Step(stale,1+Tournament.PhoneFaceLossGrace+.25f,null,new[]{0});
@@ -119,7 +120,7 @@ public static class StareRoomPhoneChecks
  static WireMessage Frame(int id,int sequence,byte[] bytes)=>new WireMessage{kind="cameraFrame",id=id,cameraSequence=sequence,cameraFrame=Convert.ToBase64String(bytes)};
  static Tournament CameraRoom()
  {
-  var room=new Tournament();room.Add(0,"HOST");room.Add(1,"PHONE");room.Input(0,0,0,true,true,0,0,0);room.Input(1,0,0,false,false,0,0,0);return room;
+  var room=new Tournament(1);room.Add(0,"HOST");room.Add(1,"PHONE");room.Input(0,0,0,true,true,0,0,0);room.Input(1,0,0,false,false,0,0,0);return room;
  }
  static void Authorize(StreamFixture fixture,Tournament room)
  {fixture.Stream.Handle(new WireMessage{kind="cameraProfile",id=1,camera=true},1,room,fixture.Transport,0);}

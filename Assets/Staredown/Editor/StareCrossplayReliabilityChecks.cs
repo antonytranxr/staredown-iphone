@@ -7,7 +7,7 @@ public static class StareCrossplayReliabilityChecks
  static int n;static void Check(bool ok,string why){n++;if(!ok)throw new Exception("Crossplay reliability: "+why);}
  static Tournament Duel()
  {
-  var t=new Tournament();t.Add(0,"Quest");var phone=t.Add(1,"Phone");phone.phoneCamera=true;
+  var t=new Tournament(1);t.Add(0,"Quest");var phone=t.Add(1,"Phone");phone.phoneCamera=true;
   t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0);Check(t.Start(),"ready two-player match starts");
   for(int i=0;i<105&&t.Phase!=MatchPhase.Duel;i++){t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0);t.Tick(.05f);}
   Check(t.Phase==MatchPhase.Duel&&t.Duel>0,"Go assigns a duel generation");return t;

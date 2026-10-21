@@ -222,7 +222,8 @@ public static class StareMobileUiChecks
                 var music=session.GetComponents<AudioSource>().FirstOrDefault(source=>source.loop&&source.clip==Resources.Load<AudioClip>("Audio/ArenaPulse"));
                 check(music!=null&&music.mute==!session.MusicEnabled,"music toggle reaches the playing arena AudioSource");
                 float desired=session.MusicVolume<.5f?.78f:.24f;Slide(hud.MusicVolumeSlider,desired,raycaster,camera);Tick(hud);
-                check(Mathf.Abs(session.MusicVolume-desired)<.035f&&Mathf.Abs(music.volume-session.MusicVolume)<.005f&&Mathf.Abs(PlayerPrefs.GetFloat("Staredown.MobileMusicVolume",-1)-session.MusicVolume)<.005f,"touching slider updates audible and saved volume");
+                var announcer=session.GetComponent<StareAnnouncer>();float audibleVolume=session.MusicVolume*(announcer!=null&&announcer.IsSpeaking?.30f:1);
+                check(Mathf.Abs(session.MusicVolume-desired)<.035f&&Mathf.Abs(music.volume-audibleVolume)<.005f&&Mathf.Abs(PlayerPrefs.GetFloat("Staredown.MobileMusicVolume",-1)-session.MusicVolume)<.005f,"touching slider updates audible and saved volume while preserving announcer ducking");
                 var settings=Capture(camera,target,Path.Combine(outputFolder,prefix+"-settings.png"));UnityEngine.Object.DestroyImmediate(settings);
                 Tap(hud.SettingsButton,raycaster,camera);Tick(hud);check(!hud.SettingsVisible,"Settings can close from its always-visible button");
 

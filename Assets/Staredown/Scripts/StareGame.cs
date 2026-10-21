@@ -133,7 +133,7 @@ namespace Staredown
    if(action=="dance-back"){view.ShowDanceChoices(rig.centerEyeAnchor,false);return;}
    if(action.StartsWith("dance:")){int choice;if(CanDance&&int.TryParse(action.Substring(6),out choice)&&choice>=-1&&choice<=3){if(model!=null)model.Dance(localId,choice>=0,Mathf.Max(0,choice));else net?.Send(0,new WireMessage{kind="dance",dancing=choice>=0,dance=Mathf.Max(0,choice)});view.ShowDanceChoices(rig.centerEyeAnchor,false);}return;}
    if(action=="bot-fill"){if(model!=null&&InLobby&&net is StareRelayNetwork){model.SetBotFill(!model.BotFillEnabled);PlayerPrefs.SetInt("Staredown.BotFill",model.BotFillEnabled?1:0);PlayerPrefs.Save();}return;}
-   if(action=="mic"){voice.ToggleMic();return;}
+   if(action=="mic"){if(!voice.VoiceEnabled){voice.ToggleVoice();voice.EnableMicrophone();}else if(!voice.MicPermissionGranted)voice.EnableMicrophone();else voice.ToggleMic();return;}
    if(action=="voice-reconnect"){voice.ReconnectVoice();return;}
    if(action=="voice"){voice.ToggleVoice();return;}
    if(action=="music"){music.Toggle();view.SetMusicLabel(music.Muted,music.Volume);return;}
@@ -326,7 +326,7 @@ namespace Staredown
    view.UpdateRoomControls(roomBusy,localId>=0,roomCode,eyes.simulated,address,model!=null,State);
    bool handsOnly=!menuController&&!rightMenuTracked&&(hands.Any(h=>h.IsTracked)||StareHandAim.TryRead(true,rig.trackingSpace,out _,out _)||StareHandAim.TryRead(false,rig.trackingSpace,out _,out _));
    view.UpdateInputInstructions(eyes.Capability,eyes.simulated,handsOnly);
-   view.UpdateDemoBlink(eyes.simulated&&!lobby&&!InterfaceOpen&&localId>=0&&State.fighters.Any(f=>f.id==localId&&f.alive),rig.centerEyeAnchor);
+   view.UpdateDemoBlink(eyes.simulated&&!lobby&&!InterfaceOpen&&localId>=0&&(State.phase==(int)MatchPhase.Countdown||State.phase==(int)MatchPhase.Duel)&&State.fighters.Any(f=>f.id==localId&&f.alive&&f.pair>=0&&f.pair<State.pairs.Length&&State.pairs[f.pair].winner<0),rig.centerEyeAnchor);
    if(selectedAvatar==StareAvatarCatalog.Meta&&localId>=0)
    {
     var personal=view.MetaViewFor(localId);
@@ -334,7 +334,8 @@ namespace Staredown
     if(personal!=null&&!string.IsNullOrEmpty(personal.Error))avatarNotice="META AVATAR UNAVAILABLE / USING FROST";
    }
    view.menu.gameObject.SetActive(lobby&&(localId<0||lobbyMenuOpen)&&!choosingAvatar);view.UpdateCharacterSelection(lobby&&choosingAvatar,selectedAvatar,avatarNotice);
-   view.lobbyStatus.text=LobbySummary;view.SetSettingsStatus(eyes.Status+"\n"+voice.Status.Split('\n')[0]+"\n"+voice.ReceiveSummary.Replace('\n',' '));view.ipText.text=string.IsNullOrEmpty(address)?"_ _ _ _":address;
+   string micStatus=voice.MicrophoneSummary+"  "+new string('|',Mathf.RoundToInt(voice.MicrophoneLevel*10));
+   view.SetMicrophoneStatus(micStatus);view.lobbyStatus.text=LobbySummary;view.SetSettingsStatus(eyes.Status.Split('\n')[0]+"\n"+micStatus+"\n"+voice.ReceiveSummary.Split('\n')[0]);view.ipText.text=string.IsNullOrEmpty(address)?"_ _ _ _":address;
    foreach(var id in pendingAvatarPoses.Keys.ToArray())
    {var avatar=view.MetaViewFor(id);if(avatar!=null){avatar.ApplyPose(pendingAvatarPoses[id]);pendingAvatarPoses.Remove(id);}else if(!State.fighters.Any(f=>f.id==id))pendingAvatarPoses.Remove(id);}
    if(Time.unscaledTime>=nextAvatarPose&&selectedAvatar==StareAvatarCatalog.Meta&&localId>=0)

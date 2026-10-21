@@ -15,7 +15,7 @@ namespace Staredown
         public int ActiveParticles {get;private set;}
         public string LastEvent {get;private set;}="";
         struct Mote {public Vector3 position,velocity;public float life,total,size,gravity,drag,stretch;public Color color;}
-        struct Previous {public bool alive;public int wins;public Vector3 seat;}
+        struct Previous {public bool alive;public int wins,lives;public Vector3 seat;}
         sealed class Ring {public MeshRenderer renderer;public Transform root;public MaterialPropertyBlock properties=new MaterialPropertyBlock();public float age,duration,radius;public Color color;}
         sealed class ResultCard {public Transform root;public TextMesh text;public float age,duration;public Vector3 position,ground;public Color color;public bool active,secondary;}
         readonly ResultCard[] cards=new ResultCard[CardCount];int cardIndex;Transform badge;Renderer badgeRenderer;Material badgeMaterial;
@@ -24,12 +24,20 @@ namespace Staredown
         readonly HashSet<int> landed=new HashSet<int>();readonly List<int> retired=new List<int>();float trailAt,impactAt,eliminateSoundAt;
         readonly Dictionary<string,AudioClip> sounds=new Dictionary<string,AudioClip>();
         readonly Vector3[] vertices=new Vector3[Capacity*4];readonly Color[] colors=new Color[Capacity*4];
-        StareGame game;Transform head;Material glow,spark,peripheral;Mesh mesh;MeshRenderer cloud,edgeRenderer;Transform edge;
+        StareGame game;StareMobileSession mobile;Transform head;Material glow,spark,peripheral;Mesh mesh;MeshRenderer cloud,edgeRenderer;Transform edge;
+        int ParticleBudget=>mobile!=null?384:Capacity;
+        public bool Ready=>initialized;
+        public void Initialize(StareMobileSession owner){mobile=owner;Setup();}
         TextMesh banner;float bannerUntil,beatAt,hoverAt,eventGlow,hapticUntil;Color eventColor;
         AudioSource sound,heartbeat;int phase=-1,second=-1,moteIndex,ringIndex;bool initialized;
-        void Start()
+        void Start(){Setup();}
+        void Setup()
         {
-            Instance=this;game=GetComponent<StareGame>();head=game.rig.centerEyeAnchor;
+            if(initialized)return;
+            game=GetComponent<StareGame>();if(mobile==null)mobile=GetComponent<StareMobileSession>();
+            head=mobile!=null&&mobile.ViewCamera!=null?mobile.ViewCamera.transform:game!=null&&game.rig!=null?game.rig.centerEyeAnchor:null;
+            var view=mobile!=null?mobile.Visuals:GetComponent<StareVisuals>();if(head==null||view==null)return;
+            Instance=this;
             glow=new Material(Resources.Load<Shader>("StareGlow"));glow.SetColor("_Color",Color.white);
             var g=new GameObject("Pooled arena sparks");g.transform.SetParent(transform,false);
             spark=new Material(Resources.Load<Shader>("StareSpark"));
@@ -45,7 +53,6 @@ namespace Staredown
                 var renderer=r.GetComponent<MeshRenderer>();renderer.sharedMaterial=glow;renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;renderer.enabled=false;
                 rings[i]=new Ring{renderer=renderer,root=r.transform};
             }
-            var view=game.GetComponent<StareVisuals>();
             for(int i=0;i<CardCount;i++)
             {
                 var root=new GameObject("Pooled arena result "+i).transform;root.SetParent(transform,false);
@@ -56,7 +63,9 @@ namespace Staredown
             edge.SetParent(head,false);edge.localPosition=new Vector3(0,0,.65f);edge.localScale=new Vector3(2.4f,2.4f,1);
             peripheral=new Material(Resources.Load<Shader>("StarePeripheral"));peripheral.SetColor("_Color",Color.clear);
             edgeRenderer=edge.GetComponent<MeshRenderer>();edgeRenderer.sharedMaterial=peripheral;edgeRenderer.shadowCastingMode=ShadowCastingMode.Off;edgeRenderer.receiveShadows=false;
-            banner=game.GetComponent<StareVisuals>().Text("",head,new Vector3(0,.20f,1.1f),.026f,Cyan);
+            banner=view.Text("",head,new Vector3(0,.20f,1.1f),.026f,Cyan);
+            // The phone HUD already presents round and eye status in screen space.
+            banner.GetComponent<Renderer>().enabled=mobile==null;
             badge=GameObject.CreatePrimitive(PrimitiveType.Quad).transform;badge.name="Competition result badge";Destroy(badge.GetComponent<Collider>());
             badge.SetParent(head,false);badge.localPosition=new Vector3(0,.20f,1.115f);badge.localScale=new Vector3(.62f,.145f,1);
             badgeMaterial=new Material(Resources.Load<Shader>("StarePanel"));badgeMaterial.SetColor("_Color",new Color(.018f,.026f,.046f));badgeMaterial.SetVector("_Size",new Vector4(.62f,.145f,.025f,.003f));badgeMaterial.SetFloat("_Selected",1);
@@ -64,7 +73,7 @@ namespace Staredown
             foreach(var clip in Resources.LoadAll<AudioClip>("Audio/Effects"))sounds[clip.name]=clip;
             sound=gameObject.AddComponent<AudioSource>();sound.playOnAwake=false;sound.spatialBlend=0;sound.priority=80;
             heartbeat=gameObject.AddComponent<AudioSource>();heartbeat.playOnAwake=false;heartbeat.spatialBlend=0;heartbeat.priority=96;
-            Fireworks=gameObject.AddComponent<StareFireworks>();Fireworks.Initialize(head,GetComponent<StareAnnouncer>());
+            Fireworks=GetComponent<StareFireworks>()??gameObject.AddComponent<StareFireworks>();Fireworks.Initialize(head,GetComponent<StareAnnouncer>());
             initialized=true;Debug.Log("[STARE FX] ready: pooled sparks, eye warning, elimination rings, victory and feedback audio");
         }
         public void TossFeedback(){if(!initialized)return;Play("Start",.12f);Rumble(.08f,.08f);}
@@ -87,7 +96,12 @@ namespace Staredown
                     Vector3 winAt=ArenaLayout.Seat(state,fighter.id);PulseRing(winAt,Gold,1.6f,1.2f);Burst(winAt+Vector3.up*1.8f,Gold,16,1.6f);
                     if(fighter.id==localId&&fighter.alive){Show("ROUND WON\n+"+(10+fighter.roundWins*5)+" COINS / +25 XP",Gold,2.2f);Flash(Gold,.10f);Rumble(.12f,.10f);}
                 }
-                previous[fighter.id]=new Previous{alive=fighter.alive,wins=fighter.roundWins,seat=ArenaLayout.Seat(state,fighter.id)};
+                if(state.livesMode&&(state.phase==(int)MatchPhase.Duel||state.phase==(int)MatchPhase.Intermission)&&previous.TryGetValue(fighter.id,out var priorLife)&&fighter.alive&&priorLife.alive&&fighter.lives<priorLife.lives)
+                {
+                    var at=ArenaLayout.Seat(state,fighter.id);PulseRing(at,Red,1.5f,.7f);Burst(at+Vector3.up*1.5f,Gold,18,.65f);
+                    if(fighter.id==localId)Show("LIFE LOST\n"+fighter.lives+" LEFT",Gold,1.6f);
+                }
+                previous[fighter.id]=new Previous{alive=fighter.alive,wins=fighter.roundWins,lives=fighter.lives,seat=ArenaLayout.Seat(state,fighter.id)};
                 if(fighter.id==localId&&fighter.alive&&fighter.pair>=0&&fighter.pair<state.pairs.Length&&state.pairs[fighter.pair].winner<0)active=true;
             }
             int tick=Mathf.CeilToInt(state.remaining);
@@ -161,7 +175,9 @@ namespace Staredown
         {
             if(!initialized)return;float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);
             var announcer=GetComponent<StareAnnouncer>();sound.volume=announcer!=null&&announcer.IsSpeaking?.45f:1;
-            Observe(game.State,game.LocalId,game.eyes.Left,game.eyes.Right,game.eyes.Valid,dt);
+            if(mobile!=null)
+            {var eyes=mobile.MobileCamera;if(eyes!=null)Observe(mobile.State,mobile.LocalId,eyes.Left,eyes.Right,eyes.Valid,dt);}
+            else if(game!=null&&game.eyes!=null)Observe(game.State,game.LocalId,game.eyes.Left,game.eyes.Right,game.eyes.Valid,dt);
             eventGlow=Mathf.MoveTowards(eventGlow,0,dt*.55f);
             Color warning=Color.Lerp(Gold,Red,Pressure);warning.a=Pressure*.24f;
             if(eventGlow>warning.a){warning=eventColor;warning.a=eventGlow;}
@@ -171,7 +187,7 @@ namespace Staredown
             else
             {float remaining=bannerUntil-Time.unscaledTime;var c=banner.color;c.a=Mathf.Clamp01(remaining*3);banner.color=c;}
             AdvanceEffects(dt);
-            badgeRenderer.enabled=!string.IsNullOrEmpty(banner.text);
+            badgeRenderer.enabled=mobile==null&&!string.IsNullOrEmpty(banner.text);
             if(badgeRenderer.enabled)
             {
                 var bounds=banner.GetComponent<Renderer>().localBounds.size;
@@ -196,11 +212,11 @@ namespace Staredown
         void Flash(Color color,float amount){eventColor=color;eventGlow=amount;}
         void Rumble(float amount,float seconds)
         {
-            if(!Application.isMobilePlatform)return;
+            if(game==null||!Application.isMobilePlatform)return;
             foreach(var hand in new[]{OVRInput.Controller.LTouch,OVRInput.Controller.RTouch})if(OVRInput.IsControllerConnected(hand))OVRInput.SetControllerVibration(.35f,amount,hand);
             hapticUntil=Time.unscaledTime+seconds;
         }
-        void StopHaptics(){if(Application.isMobilePlatform){OVRInput.SetControllerVibration(0,0,OVRInput.Controller.LTouch);OVRInput.SetControllerVibration(0,0,OVRInput.Controller.RTouch);}}
+        void StopHaptics(){if(game!=null&&Application.isMobilePlatform){OVRInput.SetControllerVibration(0,0,OVRInput.Controller.LTouch);OVRInput.SetControllerVibration(0,0,OVRInput.Controller.RTouch);}}
         void Play(string name,float volume){if(sound!=null&&sounds.TryGetValue(name,out var clip))sound.PlayOneShot(clip,volume);}
         public void UI(bool click,Vector3 position)
         {
@@ -211,10 +227,10 @@ namespace Staredown
         }
         public void Burst(Vector3 position,Color color,int count,float duration)
         {
-            for(int i=0;i<Mathf.Min(count,Capacity);i++)
+            for(int i=0;i<Mathf.Min(count,ParticleBudget);i++)
             {
                 float angle=i*2.399963f;var velocity=new Vector3(Mathf.Sin(angle),.6f+(i%7)*.14f,Mathf.Cos(angle))*(.4f+(i%5)*.24f);
-                motes[moteIndex]=new Mote{position=position,velocity=velocity,life=duration,total=duration,size=.028f+(i%3)*.012f,color=color,gravity=.55f,stretch=2};moteIndex=(moteIndex+1)%Capacity;
+                motes[moteIndex]=new Mote{position=position,velocity=velocity,life=duration,total=duration,size=.028f+(i%3)*.012f,color=color,gravity=.55f,stretch=2};moteIndex=(moteIndex+1)%ParticleBudget;
             }
         }
         void EliminationImpact(Vector3 seat)
@@ -225,7 +241,7 @@ namespace Staredown
             PulseRing(seat,Red,3.1f,1.15f);PulseRing(seat,Color.white,1.35f,.30f);PulseRing(center,Gold,1.15f,.38f,true);
         }
         void Emit(Vector3 at,Vector3 velocity,Color color,float size,float duration,float gravity,float drag,float stretch)
-        {motes[moteIndex]=new Mote{position=at,velocity=velocity,color=color,size=size,life=duration,total=duration,gravity=gravity,drag=drag,stretch=stretch};moteIndex=(moteIndex+1)%Capacity;}
+        {motes[moteIndex]=new Mote{position=at,velocity=velocity,color=color,size=size,life=duration,total=duration,gravity=gravity,drag=drag,stretch=stretch};moteIndex=(moteIndex+1)%ParticleBudget;}
         void RisingFragments(Vector3 ground,Color color,int count)
         {for(int i=0;i<count;i++){float a=i*2.399963f;var radial=new Vector3(Mathf.Sin(a),0,Mathf.Cos(a));Emit(ground+radial*(.32f+(i%4)*.09f)+Vector3.up*(.15f+(i%7)*.20f),radial*.35f+Vector3.up*(1.25f+(i%5)*.3f),color,.035f,.9f+(i%4)*.15f,-.35f,.5f,2.4f);}}
         void PulseRing(Vector3 position,Color color,float radius,float duration,bool air=false)
@@ -252,7 +268,7 @@ namespace Staredown
         void UpdateParticles(float dt)
         {
             Vector3 right=head.right,up=head.up,forward=head.forward;var worldToLocal=transform.worldToLocalMatrix;int alive=0;
-            for(int i=0;i<Capacity;i++)
+            for(int i=0;i<ParticleBudget;i++)
             {
                 var p=motes[i];int j=i*4;p.life-=dt;
                 if(p.life<=0){colors[j]=colors[j+1]=colors[j+2]=colors[j+3]=Color.clear;motes[i]=p;continue;}

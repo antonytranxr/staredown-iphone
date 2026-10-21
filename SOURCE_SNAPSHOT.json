@@ -1,12 +1,12 @@
 {
-  "source_commit": "da7b52db8ea8265ee47c2f592ec1b01ee0f1894d",
+  "source_commit": "df7f1a4d15872fc911d68434e5b5899cc5fc0fe0",
   "unity": "6000.3.26f1",
   "purpose": "Buildable iPhone app with shared VR game source",
   "generated_xcode_project_included": false,
   "signing_credentials_included": false,
-  "quest_version": "1.18.3",
-  "phone_version": "1.1.5",
-  "phone_build": "8",
+  "quest_version": "1.19.0",
+  "phone_version": "1.1.9",
+  "phone_build": "12",
   "iphone_overrides": [
     "Unity6000.3.26f1 editor pin, compatible resolved package lock and serialized editor/importer migrations",
     "iPhone export menu with command-line build entry point",

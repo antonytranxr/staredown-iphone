@@ -83,7 +83,7 @@ namespace Staredown
     if(host)
     {
      var fighter=authority.Find(sender);
-     if(fighter==null||fighter.bot||fighter.disconnected||message.id!=sender||message.camera&&authority.Phase!=MatchPhase.Lobby&&!cameraCapabilities.Contains(sender))return true;
+     if(fighter==null||fighter.bot||fighter.disconnected||message.id!=sender||message.camera&&authority.Phase!=MatchPhase.Lobby&&!cameraCapabilities.Contains(sender)&&!fighter.phoneTrackingRequired)return true;
      if(message.camera&&authority.Phase==MatchPhase.Lobby)cameraCapabilities.Add(sender);
      fighter.phoneCamera=message.camera;
      SetProfile(sender,message.camera);

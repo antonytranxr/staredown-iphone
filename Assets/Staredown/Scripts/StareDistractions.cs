@@ -32,6 +32,7 @@ namespace Staredown
         MeshRenderer beeRenderer;
         AudioClip buzzClip;
         StareGame game;
+        StareMobileSession phone;
         Transform head;
         bool initialized;
         int round = -1;
@@ -78,9 +79,24 @@ namespace Staredown
 
         void Start()
         {
+            if(initialized) return;
             game = GetComponent<StareGame>();
             if(game == null || game.rig == null) return;
-            head = game.rig.centerEyeAnchor;
+            Initialize(game.rig.centerEyeAnchor);
+        }
+
+        // The camera's eye analysis remains local to the phone. Shared arena
+        // snapshots drive the exact same distraction schedule on every device.
+        public void Initialize(StareMobileSession session)
+        {
+            phone = session;
+            if(session != null && session.ViewCamera != null) Initialize(session.ViewCamera.transform);
+        }
+
+        void Initialize(Transform eyes)
+        {
+            head = eyes;
+            if(initialized) return;
             BuildMesh();
             BuildBuzz();
             initialized = true;
@@ -90,7 +106,9 @@ namespace Staredown
         void LateUpdate()
         {
             if(!initialized) return;
-            Observe(game.State, game.LocalId, head, Mathf.Min(Time.unscaledDeltaTime, .05f));
+            var state = phone != null ? phone.State : game != null ? game.State : null;
+            int localId = phone != null ? phone.LocalId : game != null ? game.LocalId : -1;
+            Observe(state, localId, head, Mathf.Min(Time.unscaledDeltaTime, .05f));
         }
 
         public void Observe(ArenaState state, int localId, Transform eyes, float dt)

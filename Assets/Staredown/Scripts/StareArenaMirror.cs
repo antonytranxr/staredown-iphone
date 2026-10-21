@@ -7,19 +7,20 @@ namespace Staredown
   public const int CaptureSurfaceLayer=27;
   StareVisuals owner;StareMobileSession phoneSession;Material surface;Renderer pane;Camera capture;
   readonly RenderTexture[] feeds=new RenderTexture[2];readonly Plane[] frustum=new Plane[6];
-  float next,averageFrame,slowFor,recoveredFor;bool rendering,phone,budgetLimited;
+  float next,averageFrame,averageCapture,slowFor,recoveredFor;bool rendering,phone,budgetLimited;
   public int Captures {get;private set;}
   // Mirror motion is a secondary budget: phone blink detection gets priority.
   // Keep the main game responsive
   // when a phone is hot or the renderer has sustained missed frame deadlines.
   public float RefreshRate=>TargetRefreshRate(phone,phoneSession!=null&&phoneSession.MobileCamera!=null?phoneSession.MobileCamera.ThermalLevel:0,budgetLimited);
   public static float TargetRefreshRate(bool phone,int thermal,bool frameLimited)
-  {return phone?(thermal>=2||frameLimited?3:6):frameLimited?8:12;}
+  {return phone?(thermal>=2?3:frameLimited?6:15):frameLimited?12:24;}
+  public float AverageCaptureMilliseconds=>averageCapture*1000;
   public static float NextCaptureTime(float now,float scheduled,float rate)
   {
    float interval=1/Mathf.Max(1,rate);
-   // Preserve phase across frame boundaries (12 Hz at 30 FPS needs alternating
-   // two- and three-frame intervals). Skip missed captures rather than burst.
+   // Preserve phase across frame boundaries. Skip missed captures rather than
+   // scheduling a burst of expensive renders after a slow frame.
    return scheduled>0&&now-scheduled<interval?scheduled+interval:now+interval;
   }
   public void Initialize(StareVisuals view,Material material)
@@ -29,14 +30,16 @@ namespace Staredown
    float dt=Mathf.Clamp(elapsed,.001f,.1f);
    averageFrame=averageFrame<=0?dt:Mathf.Lerp(averageFrame,dt,1-Mathf.Exp(-dt*4));
    float frameBudget=1/target;
+   float nominalCaptureRate=TargetRefreshRate(phone,0,false);
+   bool captureHeavy=averageCapture*nominalCaptureRate>.20f;
    if(!budgetLimited)
    {
-    slowFor=averageFrame>frameBudget*1.15f?slowFor+dt:0;
+    slowFor=averageFrame>frameBudget*1.15f||captureHeavy?slowFor+dt:0;
     if(slowFor>=.75f){budgetLimited=true;recoveredFor=0;}
    }
    else
    {
-    recoveredFor=averageFrame<frameBudget*1.04f?recoveredFor+dt:0;
+    recoveredFor=averageFrame<frameBudget*1.04f&&averageCapture*nominalCaptureRate<.16f?recoveredFor+dt:0;
     if(recoveredFor>=3){budgetLimited=false;slowFor=0;}
    }
   }
@@ -68,7 +71,7 @@ namespace Staredown
   }
   public void Capture(Camera source)
   {
-   if(rendering||source==null)return;rendering=true;bool invert=GL.invertCulling;
+   if(rendering||source==null)return;rendering=true;bool invert=GL.invertCulling;double started=Time.realtimeSinceStartupAsDouble;
    if(capture==null){var node=new GameObject("Arena mirror capture");node.transform.SetParent(owner.transform,false);capture=node.AddComponent<Camera>();capture.enabled=false;for(int i=0;i<(phone?1:2);i++){feeds[i]=new RenderTexture(phone?512:1024,phone?768:1536,16){name="Arena mirror eye "+i,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=phone?2:4};feeds[i].Create();}surface.SetTexture("_MirrorLeft",feeds[0]);surface.SetTexture("_MirrorRight",phone?feeds[0]:feeds[1]);}
    var local=owner.LocalAvatar;var detail=local!=null?local.preset.GetComponent<LODGroup>():null;if(detail!=null&&detail.enabled&&detail.gameObject.activeInHierarchy)detail.ForceLOD(0);
    owner.SetLocalMetaCapture(true);
@@ -95,7 +98,11 @@ namespace Staredown
     if(count==1){surface.SetTexture("_MirrorRight",feeds[0]);surface.SetMatrix("_MirrorVPRight",GL.GetGPUProjectionMatrix(capture.projectionMatrix,true)*capture.worldToCameraMatrix);}
     surface.SetFloat("_MirrorReady",1);Captures++;
    }
-   finally{if(detail!=null&&detail.enabled&&detail.gameObject.activeInHierarchy)detail.ForceLOD(-1);owner.SetLocalMetaCapture(false);GL.invertCulling=invert;rendering=false;}
+   finally
+   {
+    if(detail!=null&&detail.enabled&&detail.gameObject.activeInHierarchy)detail.ForceLOD(-1);owner.SetLocalMetaCapture(false);GL.invertCulling=invert;rendering=false;
+    float cost=(float)(Time.realtimeSinceStartupAsDouble-started);averageCapture=averageCapture<=0?cost:Mathf.Lerp(averageCapture,cost,.12f);
+   }
   }
   void OnDestroy(){foreach(var feed in feeds)if(feed!=null){feed.Release();Destroy(feed);}if(capture!=null)Destroy(capture.gameObject);}
  }

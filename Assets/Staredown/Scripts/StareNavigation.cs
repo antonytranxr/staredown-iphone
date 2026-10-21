@@ -3,7 +3,7 @@ namespace Staredown
 {
  public sealed class StareNavigation : MonoBehaviour
  {
-  StareGame game;OVRCameraRig rig;StareVisuals view;StareTeleport teleport;
+  StareGame game;OVRCameraRig rig;StareVisuals view;StareTeleport teleport;StareSpectatorTools sling;
   public bool TeleportAiming=>teleport!=null&&teleport.Aiming;OVRHand[] gestureHands;OVRHand.MicrogestureType[] previousGesture;readonly float[] gestureAt=new float[2];bool turnArmed=true;float hiddenFor;readonly StareMenuHold menuHold=new StareMenuHold();
   public void Initialize(StareGame owner,StareVisuals visuals)
   {game=owner;rig=owner.rig;view=visuals;gestureHands=rig.GetComponentsInChildren<OVRHand>(true);previousGesture=new OVRHand.MicrogestureType[gestureHands.Length];teleport=gameObject.AddComponent<StareTeleport>();teleport.Initialize(game);}
@@ -45,8 +45,10 @@ namespace Staredown
   public void HandleMicrogesture(OVRHand.MicrogestureType gesture)=>HandleMicrogesture(gesture,1);
   public void HandleMicrogesture(OVRHand.MicrogestureType gesture,int side)
   {
-   // Keep the pulling hand dedicated to the ball; the left hand can still move.
-   if(game.SlingshotAvailable&&side==1)return;
+   // Equipping a sling must not consume a spectator's navigation hand. Reserve
+   // the right hand only during a draw, or a thumb tap at the loaded ball.
+   if(sling==null)sling=GetComponent<StareSpectatorTools>();
+   if(sling!=null&&sling.ReservesGesture(gesture,side))return;
    if(gesture==OVRHand.MicrogestureType.ThumbTap)
    {
     Ray ray;bool pinch;

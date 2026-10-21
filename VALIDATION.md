@@ -1,3 +1,13 @@
+# Crossplay controls, lives and microphone recovery — 2026-10-20
+
+Source targets iPhone 1.1.9 (12) and Quest 1.19.0 (40). Shared tournament checks pass for three lives with rotating opponents for actual rosters of 2–8; 9–16 retain knockout. The jumbotron displays standings and the saved champion. Private video stops sharing and purges queued frames without disabling eye tracking. Mobile has a persistent mic button, touch slingshot with independent movement, and shared bees, lightning, announcer, elimination effects and fireworks. Mirror targets rise to 24 Hz Quest / 15 Hz phone, with frame-budget and thermal fallbacks.
+
+Validation passed: 122 lives/rotation checks, 16 privacy checks, 39 phone rules, 216 uninterrupted-countdown checks, 205 countdown checks, 36 captured-blink checks, 20 paused-phone checks, 17 video-packet checks, 33 camera-protocol checks, 35 mobile-control checks, 211 presentation checks, 157 phone UI checks, 20 eye HUD checks, 16 scoreboard presentation checks and 18 actual graphic-raycast slingshot/mic/shared-effect checks. Portrait and landscape screenshots were reviewed. These are Editor and synthetic checks, not physical touch feel or sustained device performance measurements.
+
+An intermittent Quest send-only microphone failure is not reproduced on the affected device, which was unavailable. Code now repairs unexpected SDK input mute and low app input gain, preserves device/focus recovery events during asynchronous joins, and reports permission, device, gain, transmission and live mic activity. 54 mocked voice lifecycle checks passed for each of iOS and Android, including preserving explicit mute and background pause. Quiet audio never forces a reconnect. These tests do not prove native microphone capture or audibility.
+
+Unity export succeeded with zero errors and three warnings in 61.7 seconds. All 33 export/native bridge checks passed. The signed native device build succeeded in 213.5 seconds; iPhone 1.1.9 (12) was installed, verified through the device app inventory and launched. Physical touch feel, native mic audibility and sustained mirror/thermal performance still require interactive testing. TestFlight was not updated.
+
 # Simpler mobile start screen — 2026-10-20
 
 Unity export succeeded with zero errors and three warnings, all 33 export checks passed, and native device signing succeeded. Installed 1.1.8 (11) was verified on the connected iPhone. The phone was locked, so automatic launch was denied; physical screen review remains for the user. TestFlight was not updated.

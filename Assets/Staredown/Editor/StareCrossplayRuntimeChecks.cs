@@ -33,7 +33,7 @@ public static class StareCrossplayRuntimeChecks
  public static async Task<string> PhoneClientToQuestProtocol()
  {
   count=0;var phone=UnityEngine.Object.FindFirstObjectByType<StareMobileSession>();if(phone==null)throw new Exception("Mobile scene missing");
-  var host=new StareNetwork();var client=new StareNetwork();var t=new Tournament();t.Add(0,"Quest host");int peer=-1,events=0,acks=0;bool injected=false;long seq=1;double capture=Time.realtimeSinceStartupAsDouble;
+  var host=new StareNetwork();var client=new StareNetwork();var t=new Tournament(1);t.Add(0,"Quest host");int peer=-1,events=0,acks=0;bool injected=false;long seq=1;double capture=Time.realtimeSinceStartupAsDouble;
   try
   {
    host.Host();client.Join("127.0.0.1");phone.TestConnect(client,false);phone.MobileCamera.BeginTestCapture();

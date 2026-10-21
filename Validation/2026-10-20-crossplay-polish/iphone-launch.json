@@ -1,0 +1,56 @@
+{
+  "info" : {
+    "arguments" : [
+      "devicectl",
+      "device",
+      "process",
+      "launch",
+      "--device",
+      "CD82FA55-EAD7-4E39-9554-649DC1D0103C",
+      "com.antony.staredown.mobile",
+      "--json-output",
+      "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/work/crossplay-polish/iphone-launch.json"
+    ],
+    "commandType" : "devicectl.device.process.launch",
+    "environment" : {
+      "TERM" : "dumb"
+    },
+    "jsonVersion" : 2,
+    "outcome" : "success",
+    "version" : "397.28"
+  },
+  "result" : {
+    "deviceIdentifier" : "CD82FA55-EAD7-4E39-9554-649DC1D0103C",
+    "launchOptions" : {
+      "activatedWhenStarted" : true,
+      "arguments" : [
+
+      ],
+      "environmentVariables" : {
+        "TERM" : "dumb"
+      },
+      "platformSpecificOptions" : {
+
+      },
+      "startStopped" : false,
+      "terminateExistingInstances" : false,
+      "user" : {
+        "active" : true
+      }
+    },
+    "process" : {
+      "auditToken" : [
+        4294967295,
+        501,
+        501,
+        501,
+        501,
+        47866,
+        0,
+        137909
+      ],
+      "executable" : "file:///private/var/containers/Bundle/Application/3895B3A9-3AFD-404E-B095-40DF9AB7D2BB/StaredownMobile.app/StaredownMobile",
+      "processIdentifier" : 47866
+    }
+  }
+}

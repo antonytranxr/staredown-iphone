@@ -150,7 +150,7 @@ namespace Staredown
                 
                 var labelCam=broadcast?overview:Camera.main; if(labelCam!=null){a.label.transform.rotation=labelCam.transform.rotation;a.label.gameObject.SetActive(!broadcast && f.id!=localId && Vector3.Distance(labelCam.transform.position,a.root.position)<5.5f);}
                 float closure=f.bot&&a.motion.Eliminating?1:-1;
-                a.eyes.Set(closure>=0?closure:f.left,closure>=0?closure:f.right,f.yaw,f.pitch);string label=f.DisplayName+ (!f.bot&&f.demo?" / DEMO":"")+"\n"+(f.alive?f.status:"SPECTATOR");if(a.label.text!=label)a.label.text=label;a.label.color=f.bot?Gold:Cyan;
+                a.eyes.Set(closure>=0?closure:f.left,closure>=0?closure:f.right,f.yaw,f.pitch);string label=f.DisplayName+ (!f.bot&&f.demo?" / DEMO":"")+"\n"+(f.alive?f.status:"SPECTATOR")+(s.livesMode&&s.phase!=(int)MatchPhase.Lobby&&f.alive?" / "+f.lives+" "+(f.lives==1?"LIFE":"LIVES"):"");if(a.label.text!=label)a.label.text=label;a.label.color=f.bot?Gold:Cyan;
                 if(a.meta!=null)
                 {
                     a.meta.SetEyes(f.left,f.right,f.yaw,f.pitch);
@@ -167,22 +167,32 @@ namespace Staredown
                 }
             }
             var lastChampion=s.phase==(int)MatchPhase.Lobby?System.Array.Find(s.fighters,f=>f.id==s.winner):null;
-            headline.text=s.phase==(int)MatchPhase.Lobby?(lastChampion==null?"S T A R E D O W N":lastChampion.DisplayName+" / CHAMPION"):s.announcement;
+            headline.text=s.phase==(int)MatchPhase.Lobby?(StareScoreboard.ShowChampion(s)?s.championName.ToUpperInvariant()+" / LAST WINNER":lastChampion==null?"S T A R E D O W N":lastChampion.DisplayName+" / CHAMPION"):s.announcement;
             if(headline.text.Length>35) headline.characterSize=.072f;else headline.characterSize=.13f;
             int alive=s.fighters.Count(f=>f.alive);
-            subline.text=s.trackingPaused?"TRACKING LOST / ROUND PAUSED":s.phase==(int)MatchPhase.Lobby?(s.fighters.Length>0?"FREE ROAM     /     WALK AROUND AND CHAT":"16 CONTENDERS     /     ONE UNBLINKING CHAMPION"):$"ROUND {s.round:00}     /     {alive:00} STILL STANDING";
+            subline.text=s.trackingPaused?"TRACKING LOST / ROUND PAUSED":s.phase==(int)MatchPhase.Lobby?(s.fighters.Length>0?"FREE ROAM     /     WALK AROUND AND CHAT":"16 CONTENDERS     /     ONE UNBLINKING CHAMPION"):$"ROUND {s.round:00}     /     {alive:00} STILL STANDING"+(s.livesMode?" / THREE-LIFE MATCH":"");
             roundText.text=s.phase==(int)MatchPhase.Duel?$"HOLD YOUR STARE     {Mathf.CeilToInt(s.remaining):00}s":s.phase==(int)MatchPhase.Countdown?$"BLINK NOW / STARTS IN {Mathf.CeilToInt(s.remaining)}":s.phase==(int)MatchPhase.Champion?"CHAMPION":s.phase==(int)MatchPhase.Lobby?"HOST STARTS THE MATCH":"THE FINAL STARE";
             var local=System.Array.Find(s.fighters,f=>f.id==localId);
-            if(!broadcast&&local!=null&&!local.alive&&s.phase!=(int)MatchPhase.Lobby&&s.phase!=(int)MatchPhase.Champion)roundText.text=$"ROUND {s.round:00}     /     SPECTATING";
+            if(!broadcast&&local!=null&&s.phase!=(int)MatchPhase.Lobby&&s.phase!=(int)MatchPhase.Champion)
+            {
+                if(!local.alive)roundText.text=$"ROUND {s.round:00}     /     SPECTATING";
+                else if(local.pair<0)roundText.text="BYE / NEXT OPPONENT SOON";
+                else if(local.pair<s.pairs.Length&&s.pairs[local.pair].winner>=0)
+                {
+                    bool won=s.pairs[local.pair].winner==local.id;
+                    roundText.text=(won?"ROUND WON":"LIFE LOST")+(s.livesMode?" / "+local.lives+" "+(local.lives==1?"LIFE":"LIVES")+" LEFT":" / NEXT ROUND SOON");
+                }
+            }
             Fighter left=null,right=null;
             if(s.finalRound && s.pairs.Length>0){left=System.Array.Find(s.fighters,f=>f.id==s.pairs[0].a);right=System.Array.Find(s.fighters,f=>f.id==s.pairs[0].b);}
             if(left==null){left=s.fighters.FirstOrDefault(f=>f.alive);right=s.fighters.LastOrDefault(f=>f.alive);}
-            if(left!=null){portraitL.Set(left.left,left.right,left.yaw,left.pitch);boardLeft.text=left.DisplayName;boardLeft.color=left.bot?Gold:Cyan;}
-            if(right!=null){portraitR.Set(right.left,right.right,right.yaw,right.pitch);boardRight.text=right.DisplayName;boardRight.color=right.bot?Gold:Cyan;}
-            bool exploring=s.phase==(int)MatchPhase.Lobby;
-            if(exploring){boardLeft.text="ARENA LIVE";boardRight.text="EXPLORE & CHAT";UpdateArenaFeed();}
-            eyeMural?.SetFloat("_ArenaMode",exploring?1:0);
-            if(!exploring)UpdateEyeMural(left,right);
+            if(left!=null){portraitL.Set(left.left,left.right,left.yaw,left.pitch);boardLeft.text=left.DisplayName+(s.livesMode?" / "+left.lives+" LIVES":"");boardLeft.color=left.bot?Gold:Cyan;}
+            if(right!=null){portraitR.Set(right.left,right.right,right.yaw,right.pitch);boardRight.text=right.DisplayName+(s.livesMode?" / "+right.lives+" LIVES":"");boardRight.color=right.bot?Gold:Cyan;}
+            bool showEyes=StareScoreboard.ShowEyes(s);
+            if(!showEyes){boardLeft.text=StareScoreboard.ShowChampion(s)?"LAST WINNER":"ARENA LIVE";boardRight.text=s.phase==(int)MatchPhase.Lobby?"EXPLORE & CHAT":s.livesMode?"LIVES & ROUND WINS":"TOURNAMENT STATUS";UpdateArenaFeed();}
+            eyeMural?.SetFloat("_ArenaMode",showEyes?0:1);
+            if(showEyes)UpdateEyeMural(left,right);
+            UpdateScoreboard(s);
             FitBoardLabel(boardLeft,7.8f,.052f);FitBoardLabel(boardRight,7.8f,.052f);
             UpdateReferencePresentation(s,broadcast);
             foreach(var toss in s.tosses)

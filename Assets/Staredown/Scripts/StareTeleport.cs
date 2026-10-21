@@ -28,7 +28,7 @@ namespace Staredown
  public sealed class StareTeleport : MonoBehaviour
  {
   StareGame game;LineRenderer arc,marker;Material material;readonly Vector3[] points=new Vector3[40];
-  Vector3 destination;int side;float expires;bool valid;
+  Vector3 destination;int side;float expires;bool valid,waitForTapRelease;
   public bool Aiming{get;private set;}public bool ValidTarget=>Aiming&&valid;public Vector3 Destination=>destination;
   public void Initialize(StareGame owner){game=owner;}
   public void Tap(int handSide,Ray ray)
@@ -40,7 +40,7 @@ namespace Staredown
     if(valid){game.rig.transform.position+=destination-game.LocalFloor;StareFeedback.Instance?.TossFeedback();Cancel();}
     return;
    }
-   side=handSide;Aiming=true;expires=Time.unscaledTime+10;Aim(ray);
+   side=handSide;Aiming=true;waitForTapRelease=true;expires=Time.unscaledTime+10;Aim(ray);
   }
   public void Aim(Ray ray)
   {
@@ -57,7 +57,12 @@ namespace Staredown
    if(!game.CanMove||game.IsHandInteractionBusy||Time.unscaledTime>expires){Cancel();return;}
    Ray ray;bool pinch;
    if(StareHandAim.TryRead(side==0,game.rig.trackingSpace,out ray,out pinch))
-   {if(pinch||game.RayHitsUi(ray)){Cancel();return;}Aim(ray);return;}
+   {
+    // Thumb tap and index pinch can overlap for a few frames. The tap which
+    // opens teleport is not a separate cancel action; wait for its release.
+    if(!pinch)waitForTapRelease=false;
+    if(pinch&&!waitForTapRelease||game.RayHitsUi(ray)){Cancel();return;}Aim(ray);return;
+   }
    var anchor=side==0?game.rig.leftHandAnchor:game.rig.rightHandAnchor;var hand=anchor.GetComponentInChildren<OVRHand>(true);
    if(hand==null||!hand.IsTracked||!hand.IsPointerPoseValid||hand.PointerPose==null||hand.IsSystemGestureInProgress){Cancel();return;}
    ray=new Ray(hand.PointerPose.position,hand.PointerPose.forward);if(game.RayHitsUi(ray)){Cancel();return;}Aim(ray);
@@ -69,7 +74,7 @@ namespace Staredown
   }
   LineRenderer Line(string name,float width)
   {var go=new GameObject(name);go.layer=2;go.transform.SetParent(transform,false);var line=go.AddComponent<LineRenderer>();line.sharedMaterial=material;line.useWorldSpace=true;line.widthMultiplier=width;line.numCapVertices=4;line.shadowCastingMode=ShadowCastingMode.Off;line.receiveShadows=false;line.enabled=false;return line;}
-  public void Cancel(){Aiming=valid=false;if(arc!=null)arc.enabled=false;if(marker!=null)marker.enabled=false;}
+  public void Cancel(){Aiming=valid=waitForTapRelease=false;if(arc!=null)arc.enabled=false;if(marker!=null)marker.enabled=false;}
   void OnDisable(){Cancel();}void OnDestroy(){if(material!=null)Destroy(material);}
  }
 }

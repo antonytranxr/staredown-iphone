@@ -1,0 +1,7 @@
+[
+  "controls: 35 mobile privacy/microphone/multitouch slingshot checks passed",
+  "parity: 211 crossplatform bees / announcer / fireworks / spectator gesture / mirror checks passed; peak fireworks=1616",
+  "ui: 157 phone UI/name/settings/orientation checks passed; sixteen 2x-MSAA PNGs saved in /Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/work/crossplay-polish/review",
+  "eyeHud: 20 mobile competition selfie/live eye/grace/portrait/landscape UI checks passed",
+  "scoreboard: 16 rendered arena scoreboard/champion/finalist presentation checks passed"
+]

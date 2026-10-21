@@ -20,7 +20,7 @@ public static class StareRoomChecks
   Check(Vector3.Angle(stable.Sample(closure,false,0,.08f,.02f).direction,aim.direction)<.01f,"release hysteresis");
   Check(Vector3.Angle(stable.Sample(closure,false,0,.2f,.02f).direction,aim.direction)>1,"released hand resumes aiming");
   stable.Reset();Check(Vector3.Angle(stable.Sample(closure,false,0,.3f,.02f).direction,closure.direction)<.01f,"tracking recovery resets aim");
-  var t=new Tournament();t.Add(0,"HOST");t.Add(1,"DEMO");t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0,true);
+  var t=new Tournament(1);t.Add(0,"HOST");t.Add(1,"DEMO");t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0,true);
   Check(t.Find(1).demo&&!t.Find(0).demo&&t.Start(),"mixed real-eye and demo match admission");
   for(int n=0;n<110;n++){t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0,true);t.Tick(.05f);}
   Check(t.Phase==MatchPhase.Duel,"mixed demo countdown reaches duel");
@@ -41,7 +41,7 @@ public static class StareRoomChecks
    int id=-1;bool connected=false;
    await Spin(host,client,()=>{while(host.Poll(out var p))if(JsonUtility.FromJson<WireMessage>(p.json).kind=="connected")id=p.sender;while(client.Poll(out var q))if(JsonUtility.FromJson<WireMessage>(q.json).kind=="connected")connected=true;return id>0&&connected;},30);
    Check(id>0&&connected,"host/client connect");
-   var t=new Tournament();for(int n=0;n<Tournament.Capacity;n++)t.Add(n,"PLAYER "+n,true);
+   var t=new Tournament(1);for(int n=0;n<Tournament.Capacity;n++)t.Add(n,"PLAYER "+n,true);
    string large=new string('p',4000);host.Send(id,new WireMessage{kind="avatarPose",pose=large});host.Broadcast(new WireMessage{kind="state",state=t.Snapshot()});
    bool pose=false,state=false;await Spin(host,client,()=>{while(client.Poll(out var p)){var m=JsonUtility.FromJson<WireMessage>(p.json);pose|=m.kind=="avatarPose"&&m.pose==large;state|=m.kind=="state"&&m.state.fighters.Length==Tournament.Capacity;}return pose&&state;},10);
    Check(pose&&state,"fragmented pose and 16-player snapshot delivery");
@@ -62,7 +62,7 @@ public static class StareRoomChecks
  }
  public static string SocialRulesChecks()
  {
-  checks=0;var t=new Tournament();t.Add(0,"HOST");t.Add(1,"GUEST");
+  checks=0;var t=new Tournament(1);t.Add(0,"HOST");t.Add(1,"GUEST");
   Check(t.RoomPose(1,new Vector3(3,0,-2),125),"guest can roam in lobby");
   var snapshot=JsonUtility.FromJson<ArenaState>(JsonUtility.ToJson(t.Snapshot()));
   Check(ArenaLayout.Seat(snapshot,1)==new Vector3(3,0,-2)&&Vector3.Angle(ArenaLayout.Facing(snapshot,1),Quaternion.Euler(0,125,0)*Vector3.forward)<.01f,"position and heading survive snapshot");
@@ -79,7 +79,7 @@ public static class StareRoomChecks
   t.Remove(1);for(int i=0;i<400;i++){t.Input(0,0,0,true,true,0,0,0);t.Tick(.05f);}
   Check(t.Phase==MatchPhase.Lobby&&t.Find(1)==null&&t.Fighters.Count==1,"disconnected contestants removed before next match");
   Check(t.Add(2,"NEW GUEST")!=null,"new guests can join after completion");
-  var full=new Tournament();for(int i=0;i<Tournament.Capacity;i++)full.Add(i,"BOT "+i,true);full.Start();bool crowned=false;
+  var full=new Tournament(1);for(int i=0;i<Tournament.Capacity;i++)full.Add(i,"BOT "+i,true);full.Start();bool crowned=false;
   for(int i=0;i<12000;i++){full.Tick(.05f);crowned|=full.Phase==MatchPhase.Champion;if(crowned&&full.Phase==MatchPhase.Lobby)break;}
   Check(crowned&&full.Phase==MatchPhase.Lobby&&full.Fighters.Count==Tournament.Capacity&&full.Fighters.TrueForAll(f=>f.alive&&f.pair==-1),"full sixteen-player elimination returns all contestants to social arena");
   var all=full.Snapshot();foreach(var f in all.fighters)Check(Mathf.Abs(ArenaLayout.Seat(all,f.id).y)<.001f&&ArenaLayout.Seat(all,f.id).magnitude<=8.01f,"contestant "+f.id+" returns to arena floor");

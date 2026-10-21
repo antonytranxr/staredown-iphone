@@ -13,7 +13,7 @@ namespace Staredown
   readonly Vector3[] vertices=new Vector3[Capacity*4];readonly Color[] colors=new Color[Capacity*4];
   readonly AudioSource[] sources=new AudioSource[16];readonly float[] volumes=new float[16];
   Mesh mesh;Material material;MeshRenderer cloud;Transform head;StareAnnouncer announcer;
-  AudioClip launchClip,burstClip;int sparkIndex,rocketIndex,audioIndex,wave=-1;bool celebrating;
+  AudioClip launchClip,burstClip;int sparkIndex,rocketIndex,audioIndex,wave=-1;bool celebrating,simulating;
   public int Launches {get;private set;} public int Bursts {get;private set;} public int ActiveParticles {get;private set;}
   public int ActiveRockets {get;private set;}
   static readonly Color[] Palette={new Color(1,.68f,.12f),new Color(.18f,.85f,1),new Color(1,.3f,.6f),new Color(.6f,.38f,1)};
@@ -21,7 +21,7 @@ namespace Staredown
   {float angle=(index*137.5f+25)*Mathf.Deg2Rad;return new Vector3(Mathf.Sin(angle)*16.8f,1.4f,Mathf.Cos(angle)*16.8f);}
   public void Initialize(Transform eye,StareAnnouncer voice)
   {
-   head=eye;announcer=voice;var node=new GameObject("Pooled arena fireworks");node.transform.SetParent(transform,false);
+   head=eye;announcer=voice;if(mesh!=null)return;var node=new GameObject("Pooled arena fireworks");node.transform.SetParent(transform,false);
    cloud=node.AddComponent<MeshRenderer>();material=new Material(Resources.Load<Shader>("StareFirework"));cloud.sharedMaterial=material;cloud.shadowCastingMode=ShadowCastingMode.Off;cloud.receiveShadows=false;cloud.enabled=false;
    mesh=new Mesh{name="2048 pooled celebration sparks"};mesh.MarkDynamic();node.AddComponent<MeshFilter>().sharedMesh=mesh;
    var indices=new int[Capacity*6];var uv=new Vector2[Capacity*4];
@@ -32,6 +32,7 @@ namespace Staredown
   }
   public void Observe(ArenaState state)
   {
+   if(state==null||mesh==null)return;
    bool champion=state.phase==(int)MatchPhase.Champion&&state.winner>=0;
    if(!champion){if(celebrating)Clear();celebrating=false;wave=-1;return;}
    float elapsed=Mathf.Clamp(8-state.remaining,0,8);int next=Mathf.FloorToInt(elapsed/Interval);
@@ -41,7 +42,7 @@ namespace Staredown
   }
   void Launch(int index)
   {
-   var color=Palette[(index/2)%Palette.Length];rockets[rocketIndex]=new Rocket{active=true,origin=LaunchPosition(index),color=color,duration=.95f+(index%3)*.12f,height=13+(index%4)*1.7f,seed=index};rocketIndex=(rocketIndex+1)%RocketCapacity;
+   simulating=true;var color=Palette[(index/2)%Palette.Length];rockets[rocketIndex]=new Rocket{active=true,origin=LaunchPosition(index),color=color,duration=.95f+(index%3)*.12f,height=13+(index%4)*1.7f,seed=index};rocketIndex=(rocketIndex+1)%RocketCapacity;
    Sound(launchClip,LaunchPosition(index),.28f,1+(index%3)*.05f);Launches++;
   }
   void Sound(AudioClip clip,Vector3 at,float volume,float pitch)
@@ -68,7 +69,7 @@ namespace Staredown
   static Vector3 RandomDirection(int i)=>new Vector3(Mathf.Sin(i*2.4f),Mathf.Cos(i*1.7f),Mathf.Cos(i*2.4f)).normalized;
   public void Advance(float dt)
   {
-   if(mesh==null)return;dt=Mathf.Clamp(dt,0,.05f);int activeRockets=0;
+   if(mesh==null||!simulating)return;dt=Mathf.Clamp(dt,0,.05f);int activeRockets=0;
    for(int i=0;i<RocketCapacity;i++)
    {
     var rocket=rockets[i];if(!rocket.active)continue;rocket.age+=dt;
@@ -76,7 +77,7 @@ namespace Staredown
     rocket.trail+=dt;if(rocket.trail>=.025f){rocket.trail=0;Emit(at,Vector3.down*.8f,rocket.color,.085f,.38f);Emit(at,Vector3.zero,Color.white,.11f,.10f);}
     if(t>=1){rocket.active=false;Explode(rocket,at);}else activeRockets++;rockets[i]=rocket;
    }
-   ActiveRockets=activeRockets;int alive=0;var forward=head.forward;var up=head.up;var worldToLocal=transform.worldToLocalMatrix;
+   ActiveRockets=activeRockets;int alive=0;var forward=head!=null?head.forward:Vector3.forward;var up=head!=null?head.up:Vector3.up;var worldToLocal=transform.worldToLocalMatrix;
    for(int i=0;i<Capacity;i++)
    {
     var p=sparks[i];int j=i*4;p.life-=dt;
@@ -86,10 +87,10 @@ namespace Staredown
     var a=side*size;var b=tangent*size*(1+Mathf.Min(1.5f,p.velocity.magnitude*.35f));var c=p.color;c.a=fade*(.78f+.22f*Mathf.Sin(p.life*24+i));
     vertices[j]=worldToLocal.MultiplyPoint3x4(p.position-a-b);vertices[j+1]=worldToLocal.MultiplyPoint3x4(p.position+a-b);vertices[j+2]=worldToLocal.MultiplyPoint3x4(p.position+a+b);vertices[j+3]=worldToLocal.MultiplyPoint3x4(p.position-a+b);colors[j]=colors[j+1]=colors[j+2]=colors[j+3]=c;sparks[i]=p;alive++;
    }
-   ActiveParticles=alive;cloud.enabled=alive>0;if(alive>0){mesh.vertices=vertices;mesh.colors=colors;}
+   ActiveParticles=alive;simulating=alive>0||activeRockets>0;cloud.enabled=alive>0;if(alive>0){mesh.vertices=vertices;mesh.colors=colors;}
    for(int i=0;i<sources.Length;i++)if(sources[i].isPlaying)sources[i].volume=volumes[i]*(announcer!=null&&announcer.IsSpeaking?.45f:1);
   }
-  public void Clear(){for(int i=0;i<Capacity;i++)sparks[i].life=0;for(int i=0;i<RocketCapacity;i++)rockets[i].active=false;foreach(var source in sources)if(source!=null)source.Stop();if(cloud!=null)cloud.enabled=false;ActiveParticles=ActiveRockets=0;}
+  public void Clear(){for(int i=0;i<Capacity;i++)sparks[i].life=0;for(int i=0;i<RocketCapacity;i++)rockets[i].active=false;foreach(var source in sources)if(source!=null)source.Stop();if(cloud!=null)cloud.enabled=false;ActiveParticles=ActiveRockets=0;simulating=false;}
   void OnDisable(){Clear();celebrating=false;wave=-1;}
   void OnDestroy(){if(mesh!=null)Destroy(mesh);if(material!=null)Destroy(material);}
  }

@@ -60,8 +60,8 @@ public static class StareVideoStabilityChecks
    client.Sync(null,room.Snapshot(),1);check(!client.HasCachedFeed(1)&&!client.HasLiveFeed(1),"camera owner releasing a borrowed texture is safe");client.Reset();
    client.Sync(null,room.Snapshot(),1);client.Publish(jpeg,1,null,transport,preview);room.Find(1).disconnected=true;client.Sync(null,room.Snapshot(),1);
    await Task.Delay(60);check(preview!=null&&client.FeedCount==0&&!client.HasCachedFeed(1)&&client.DiagnosticsSummary=="VIDEO OFF","disconnect clears profile/cache immediately without touching borrowed preview");
-   check(StareArenaMirror.TargetRefreshRate(true,0,false)==6&&StareArenaMirror.TargetRefreshRate(true,2,false)==3&&StareArenaMirror.TargetRefreshRate(true,0,true)==3,"phone mirror gives detection priority at6Hz /3Hz under pressure");
-   check(StareArenaMirror.TargetRefreshRate(false,0,false)==12&&StareArenaMirror.TargetRefreshRate(false,0,true)==8,"Quest mirror remains12Hz with8Hz fallback");
+   check(StareArenaMirror.TargetRefreshRate(true,0,false)==15&&StareArenaMirror.TargetRefreshRate(true,2,false)==3&&StareArenaMirror.TargetRefreshRate(true,0,true)==6,"phone mirror targets15Hz /6Hz under frame pressure /3Hz when hot");
+   check(StareArenaMirror.TargetRefreshRate(false,0,false)==24&&StareArenaMirror.TargetRefreshRate(false,0,true)==12,"Quest mirror targets24Hz with12Hz fallback");
    return count+" video stability / preview ownership / phone mirror checks passed";
   }
   finally{if(root!=null)UnityEngine.Object.DestroyImmediate(root);if(preview!=null)UnityEngine.Object.DestroyImmediate(preview);if(another!=null)UnityEngine.Object.DestroyImmediate(another);}

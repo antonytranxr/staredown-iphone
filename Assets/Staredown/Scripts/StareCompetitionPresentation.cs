@@ -4,12 +4,18 @@ namespace Staredown
 {
  public sealed class StareCompetitionPresentation : MonoBehaviour
  {
-  StareGame game;StareVisuals view;MeshRenderer[] fields;Material fieldMaterial;Mesh fieldMesh;
+  StareGame game;StareMobileSession mobile;StareVisuals view;MeshRenderer[] fields;Material fieldMaterial;Mesh fieldMesh;
   Transform lightningRoot;LineRenderer[] bolts=new LineRenderer[4];Light skyFlash;Material boltMaterial;int strike=-1,audibleStrike=-1;AudioSource thunder;AudioClip thunderClip;StareAnnouncer announcer;
   MaterialPropertyBlock properties;Material baseSky,flashSky;float skyExposure;
   public void Initialize(StareGame owner,StareVisuals visuals)
   {
-   game=owner;view=visuals;properties=new MaterialPropertyBlock();fieldMaterial=new Material(Resources.Load<Shader>("StareEnergyField"));fieldMesh=new Mesh{name="Shared competitor protective field"};
+   game=owner;Setup(visuals);
+  }
+  public void Initialize(StareMobileSession owner,StareVisuals visuals){mobile=owner;Setup(visuals);}
+  void Setup(StareVisuals visuals)
+  {
+   if(fields!=null)return;
+   view=visuals;properties=new MaterialPropertyBlock();fieldMaterial=new Material(Resources.Load<Shader>("StareEnergyField"));fieldMesh=new Mesh{name="Shared competitor protective field"};
    var vertices=new Vector3[66];var uv=new Vector2[66];var indices=new int[32*6];
    for(int i=0;i<=32;i++){float a=i*Mathf.PI*2/32;vertices[i*2]=new Vector3(Mathf.Sin(a),0,Mathf.Cos(a));vertices[i*2+1]=vertices[i*2]+Vector3.up;uv[i*2]=new Vector2(i/32f,0);uv[i*2+1]=new Vector2(i/32f,1);if(i<32){int t=i*6,v=i*2;indices[t]=v;indices[t+1]=v+1;indices[t+2]=v+2;indices[t+3]=v+2;indices[t+4]=v+1;indices[t+5]=v+3;}}
    fieldMesh.vertices=vertices;fieldMesh.uv=uv;fieldMesh.triangles=indices;fieldMesh.RecalculateBounds();fields=new MeshRenderer[Tournament.Capacity];
@@ -30,7 +36,7 @@ namespace Staredown
   }
   void LateUpdate()
   {
-   if(game==null||fields==null)return;if(properties==null)properties=new MaterialPropertyBlock();var state=game.State;bool active=state.phase!=(int)MatchPhase.Lobby;int index=0;
+   if(game==null&&mobile==null||fields==null)return;if(properties==null)properties=new MaterialPropertyBlock();var state=mobile!=null?mobile.State:game.State;bool active=state.phase!=(int)MatchPhase.Lobby&&state.phase!=(int)MatchPhase.Champion;int index=0;
    foreach(var f in state.fighters)if(active&&f.alive&&index<fields.Length){var field=fields[index++];field.enabled=true;field.transform.position=ArenaLayout.Seat(state,f.id);properties.SetColor("_Color",f.bot?new Color(1,.66f,.2f):new Color(.18f,.85f,1));field.SetPropertyBlock(properties);}
    for(int i=index;i<fields.Length;i++)fields[i].enabled=false;
    bool enabled=view.CurrentArenaTheme==1&&state.phase==(int)MatchPhase.Duel&&!state.trackingPaused;

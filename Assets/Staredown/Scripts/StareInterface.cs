@@ -24,7 +24,9 @@ namespace Staredown
   public bool OpeningInstructionsVisible=>openingInstructions!=null&&openingInstructions.gameObject.activeSelf;
   public void SetFpsLabel(bool shown){if(fpsSettingLabel!=null)fpsSettingLabel.text=shown?"FPS counter: On":"FPS counter: Off";}
   TextMesh settingsStatus,settingsVoiceLabel,homeSubtitle,arenaChoiceLabel;StareButton exploreButton,brightArenaButton,moonlitArenaButton,sunstoneArenaButton;
-  TextMesh micLabel,matchMicLabel,voiceLabel;
+  TextMesh micLabel,matchMicLabel,voiceLabel,matchMicrophoneStatus;
+  public void SetMicrophoneStatus(string value)
+  {if(matchMicrophoneStatus!=null){matchMicrophoneStatus.text=value;FitBoardLabel(matchMicrophoneStatus,2.34f,.020f*.42f);}}
   public void SetVoiceLabels(bool muted,bool enabled){if(micLabel!=null)micLabel.text=muted?"Mic: Muted":"Mic: On";if(matchMicLabel!=null)matchMicLabel.text=muted?"Mic: Muted":"Mic: On";if(voiceLabel!=null)voiceLabel.text=enabled?"Voice: On":"Voice: Off";if(settingsVoiceLabel!=null)settingsVoiceLabel.text=enabled?"Voice: On":"Voice: Off";}
   TextMesh profileName,inputModeLabel,roomLabel,joinNoticeLabel;StareButton hostRoomButton,joinRoomButton,joinCodeButton,inputModeButton;Transform demoBlink;
   readonly List<TextMesh> musicLabels=new List<TextMesh>();
@@ -316,6 +318,7 @@ namespace Staredown
    matchMenu=Group("Staredown / Match menu",transform,Vector3.zero);matchMenu.localScale=Vector3.one*.65f;UIFrame(matchMenu,new Vector2(2.85f,2.85f),"MATCH");
    matchMicLabel=UIButton("Mic: On","mic",matchMenu,new Vector3(-.61f,.85f,-.06f),new Vector2(1.12f,.25f)).GetComponentInChildren<TextMesh>();
    voiceLabel=UIButton("Voice: On","voice",matchMenu,new Vector3(.61f,.85f,-.06f),new Vector2(1.12f,.25f)).GetComponentInChildren<TextMesh>();
+   matchMicrophoneStatus=UILabel("MIC / JOIN AN ONLINE ROOM",matchMenu,new Vector3(0,.66f,-.045f),.020f,UIAccent,false,TextAnchor.MiddleCenter);
    matchMenuTitle=UILabel("Take a breath.",matchMenu,new Vector3(-1.16f,.52f,-.04f),.063f,UIInk,true);
    matchMenuBody=UILabel("The round continues while this menu is open.",matchMenu,new Vector3(-1.16f,.24f,-.04f),.027f,UIMuted);
    MusicControls(matchMenu,new Vector3(0,-.14f,-.06f),2.34f);

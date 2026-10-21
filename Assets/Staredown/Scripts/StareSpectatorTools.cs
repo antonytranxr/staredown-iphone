@@ -56,6 +56,11 @@ namespace Staredown
    return spectator&&!menu&&now<until;
   }
  }
+ public static class StareSlingshotGesture
+ {
+  public static bool Reserved(OVRHand.MicrogestureType gesture,int side,bool drawing,bool available,bool nearBall)
+  {return side==1&&(drawing||available&&nearBall&&gesture==OVRHand.MicrogestureType.ThumbTap);}
+ }
  public sealed class StareSpectatorTools : MonoBehaviour
  {
   struct HandInput {public bool tracked,down,allowed,controller;public Vector3 position;public Ray aim;}
@@ -64,6 +69,11 @@ namespace Staredown
   Transform frame,pouch;TextMesh cue;LineRenderer cord,trajectory;Material lineMaterial;Vector3 fork,lastForward=Vector3.forward;int prop;bool hasAim;float nextToss,nextDebug;
   public int LocalTosses{get;private set;}public bool Drawing=>draw.Active;public bool Equipped=>frame!=null&&frame.gameObject.activeSelf;public Vector3 GripPosition=>frame.TransformPoint(new Vector3(0,-.13f,0));public Vector3 BallPosition=>pouch.position;public float DrawStrength=>draw.Strength;
   public bool CanThrow=>game!=null&&StareThrowAssist.CanThrow(game.State,game.LocalId);
+  public bool ReservesGesture(OVRHand.MicrogestureType gesture,int side)
+  {
+   bool near=inputs[1].tracked&&NearBall(inputs[1].position,fork,inputs[1].controller);
+   return StareSlingshotGesture.Reserved(gesture,side,Drawing,CanThrow&&Equipped,near);
+  }
   public void RotateWithRig(Quaternion rotation){lastForward=rotation*lastForward;draw.RotateWithRig(rotation);}
   public string InputDebug=>"SLING L "+(inputs[0].tracked?"OK":"LOST")+" R "+(inputs[1].tracked?"OK":"LOST")+" "+(inputs[1].down?"GRAB":"OPEN")+" "+Vector3.Distance(inputs[1].position,fork).ToString("0.00")+"m";
   public float Cooldown=>Mathf.Max(0,nextToss-Time.unscaledTime);

@@ -15,13 +15,13 @@ namespace Staredown
         RectTransform voicePanel;Text voiceDetails;Button voiceRepair,voiceDone;
         RectTransform leftEyeChip,rightEyeChip,trackingGrace,trackingGraceFill;Text leftEyeText,rightEyeText,eyeGuidance;
         RectTransform safe,homeShade,home,homeIntro,nameCard,playCard,homeStatusPanel,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
-        Text playTitle,joinHint;
+        Text playTitle,joinHint,roomMicLabel,videoShareLabel,slingTitle,slingHint;RectTransform slingPanel,slingBall;StareMobileSlingPad slingPad;Button roomMic,videoShare;
         Text brand,brandTag,hero,description,namePrompt,homeHint,homeStatus,roomLabel,roomStatus,caption,movementHint,lookHint,cameraTag,cameraStatus,cameraPrivacy;
         Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus,diagnosticsTitle,diagnosticsText;
         InputField code,playerName,nameEditorInput;RawImage preview;Slider musicVolume;
         Button practice,host,join,leave,start,fill,dance,cameraToggle,cameraCard,cameraPower,editPlayerName,settingsButton,settingsDone,nameCancel,nameConfirm,musicToggle,mic,voiceToggle,portraitChoice,landscapeChoice,calibrate,settingsName,settingsLeave;
         StareMobileJoystick joystick;StareMobileLookPad lookPad;
-        Vector2 lastScreen,layoutSize;Rect lastSafe;bool portrait,lastConnected,lastLobby,lastHosting,layoutReady;
+        Vector2 lastScreen,layoutSize;Rect lastSafe;bool portrait,lastConnected,lastLobby,lastHosting,layoutReady,lastCanThrow;
         string pendingEntry="",pendingCode="",entryError="";bool syncingMusic;
         bool previewExpanded,wasConnected,wasCanMove;float movementHintUntil,captionChangedAt;string previousCaption="";
         bool contestPreview;float missingEyesAt=-1;
@@ -59,6 +59,10 @@ namespace Staredown
         public Button CameraPowerButton=>cameraPower;
         public Button CameraPreviewButton=>cameraCard;
         public Button CameraSetupButton=>cameraToggle;
+        public Button RoomMicButton=>roomMic;
+        public Button ShareVideoButton=>videoShare;
+        public RectTransform SlingshotPanelRect=>slingPanel;
+        public StareMobileSlingPad SlingshotControl=>slingPad;
         public bool CollapsedPreview=>session!=null&&session.Connected&&!PreviewExpanded;
         public bool PreviewExpanded=>session!=null&&session.Connected&&(previewExpanded||contestPreview);
         public bool CompetitionPreview=>contestPreview;
@@ -135,6 +139,7 @@ namespace Staredown
         {
             roomBar=Box("Room toolbar",safe,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
             roomBar.GetComponent<Image>().raycastTarget=false;
+            roomMic=ButtonElement("Mic on",safe,Vector2.zero,Vector2.one,()=>session.Act("mic"));roomMicLabel=roomMic.GetComponentInChildren<Text>();
             roomLabel=Label("",roomBar,Vector2.zero,Vector2.one,28,Color.white,true);roomStatus=Label("",roomBar,Vector2.zero,Vector2.one,18,Muted);
             editPlayerName=ButtonElement("Your name",roomBar,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));nameButtonLabel=editPlayerName.GetComponentInChildren<Text>();Fit(nameButtonLabel,15,21);
             fill=ButtonElement("Bots: on",roomBar,Vector2.zero,Vector2.one,()=>session.Act("bot-fill"));fillLabel=fill.GetComponentInChildren<Text>();
@@ -175,11 +180,18 @@ namespace Staredown
             var knob=Box("Joystick thumb",pad,new Vector2(.5f,.5f),Vector2.zero,new Vector2(58,58),new Vector2(.5f,.5f),Cyan);knob.GetComponent<Image>().raycastTarget=false;
             joystick=pad.gameObject.AddComponent<StareMobileJoystick>();joystick.Initialize(session,knob,49);
             movementHint=Label("",safe,Vector2.zero,Vector2.one,17,Color.white);lookHint=Label("Swipe to look",safe,Vector2.zero,Vector2.one,17,Muted,false,TextAnchor.MiddleRight);
-            dance=ButtonElement("Dance",safe,Vector2.zero,new Vector2(144,64),()=>dancePicker.gameObject.SetActive(!dancePicker.gameObject.activeSelf));
+            dance=ButtonElement("Dance",safe,Vector2.zero,new Vector2(144,64),()=>{session.Slingshot?.Cancel();dancePicker.gameObject.SetActive(!dancePicker.gameObject.activeSelf);});
             dancePicker=Box("Quick dances",safe,new Vector2(1,0),Vector2.zero,new Vector2(238,300),new Vector2(1,0),Ink);
             string[] options={"Hip hop","Charleston","Lindy hop","Fancy footwork","Stop dancing"};
             for(int index=0;index<options.Length;index++){int choice=index==4?-1:index;var button=ButtonElement(options[index],dancePicker,new Vector2(10,-10-index*57),new Vector2(218,49),()=>{session.Act("dance:"+choice);dancePicker.gameObject.SetActive(false);});Fit(button.GetComponentInChildren<Text>(),17,21);}
             dancePicker.gameObject.SetActive(false);
+            slingPanel=Box("Touch slingshot",safe,new Vector2(1,0),Vector2.zero,new Vector2(188,172),new Vector2(1,0),Ink);
+            slingTitle=Label("PULL & RELEASE",slingPanel,new Vector2(10,-10),new Vector2(168,26),16,Cyan,true,TextAnchor.MiddleCenter);
+            slingHint=Label("Pull ball down. Sideways to aim.",slingPanel,new Vector2(9,-127),new Vector2(170,36),13,Muted,false,TextAnchor.MiddleCenter);
+            var forkLeft=Box("Sling left fork",slingPanel,new Vector2(.5f,1),new Vector2(-36,-61),new Vector2(13,54),new Vector2(.5f,.5f),Muted);forkLeft.localRotation=Quaternion.Euler(0,0,25);forkLeft.GetComponent<Image>().raycastTarget=false;
+            var forkRight=Box("Sling right fork",slingPanel,new Vector2(.5f,1),new Vector2(36,-61),new Vector2(13,54),new Vector2(.5f,.5f),Muted);forkRight.localRotation=Quaternion.Euler(0,0,-25);forkRight.GetComponent<Image>().raycastTarget=false;
+            slingBall=Box("Drag projectile",slingPanel,new Vector2(.5f,1),new Vector2(0,-72),new Vector2(48,48),new Vector2(.5f,.5f),Cyan);slingBall.GetComponent<Image>().raycastTarget=false;
+            slingPad=slingPanel.gameObject.AddComponent<StareMobileSlingPad>();slingPad.Initialize(session.Slingshot,slingBall);slingPanel.gameObject.SetActive(false);
         }
         void BuildModals()
         {
@@ -202,6 +214,7 @@ namespace Staredown
             portraitChoice=ButtonElement("Portrait",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetLandscapeMode(false));landscapeChoice=ButtonElement("Landscape",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetLandscapeMode(true));
             calibrate=ButtonElement("Calibrate eyes",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("calibrate"),true);
             cameraPower=ButtonElement("Enable camera",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("camera"));
+            videoShare=ButtonElement("Video shared",settingsPanel,Vector2.zero,Vector2.one,()=>session.Act("share-video"));videoShareLabel=videoShare.GetComponentInChildren<Text>();
             calibrationStatus=Label("",settingsPanel,Vector2.zero,Vector2.one,18,Muted);
             diagnosticsTitle=Label("TRACKING DIAGNOSTICS",settingsPanel,Vector2.zero,Vector2.one,16,Cyan,true);
             diagnosticsText=Label("",settingsPanel,Vector2.zero,Vector2.one,14,Muted);
@@ -299,7 +312,7 @@ namespace Staredown
             if(!session.Connected||contestPreview)return;previewExpanded=!previewExpanded;layoutReady=false;
             ApplyLayout(layoutSize.x,layoutSize.y,portrait,true,session.State.phase==(int)MatchPhase.Lobby,session.Hosting);
         }
-        void PauseTouches(){joystick?.Release();lookPad?.Release();if(dancePicker!=null)dancePicker.gameObject.SetActive(false);}
+        void PauseTouches(){session?.Slingshot?.Cancel();joystick?.Release();lookPad?.Release();if(dancePicker!=null)dancePicker.gameObject.SetActive(false);}
         void UpdateModal(){scrim.gameObject.SetActive(SettingsVisible||NameEditorVisible);settingsButton.transform.SetAsLastSibling();}
 
         void Update()
@@ -314,10 +327,12 @@ namespace Staredown
             if(connected&&session.CanMove&&!wasCanMove)movementHintUntil=Time.unscaledTime+4;
             wasConnected=connected;wasCanMove=session.CanMove;
             if(connected&&!lobby&&NameEditorVisible)ShowNameEditor(false);
-            if(!layoutReady||connected!=lastConnected||lobby!=lastLobby||session.Hosting!=lastHosting)ApplyLayout(layoutSize.x,layoutSize.y,portrait,connected,lobby,session.Hosting);
+            if(!layoutReady||connected!=lastConnected||lobby!=lastLobby||session.Hosting!=lastHosting||session.CanThrow!=lastCanThrow)ApplyLayout(layoutSize.x,layoutSize.y,portrait,connected,lobby,session.Hosting);
             home.gameObject.SetActive(!connected);brand.gameObject.SetActive(!connected);brandTag.gameObject.SetActive(!connected);roomBar.gameObject.SetActive(connected);
             homeShade.gameObject.SetActive(!connected);
             bool modal=SettingsVisible||NameEditorVisible;
+            roomMic.gameObject.SetActive(connected&&!modal);slingPanel.gameObject.SetActive(connected&&session.CanThrow&&!modal&&!dancePicker.gameObject.activeSelf);
+            if(session.Slingshot!=null){slingTitle.text=session.Slingshot.Hint;slingBall.GetComponent<Image>().color=Color.Lerp(Cyan,new Color(1,.8f,.3f),session.Slingshot.Strength);}
             lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(false);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
             dance.gameObject.SetActive(connected&&!modal);dance.interactable=session.CanDance;
             if(!connected||!session.CanDance||modal)dancePicker.gameObject.SetActive(false);
@@ -329,7 +344,7 @@ namespace Staredown
             homeStatusPanel.gameObject.SetActive(!string.IsNullOrEmpty(homeStatus.text));
             leave.gameObject.SetActive(false);editPlayerName.gameObject.SetActive(false);nameButtonLabel.text=session.PlayerName;
             roomLabel.text=string.IsNullOrEmpty(session.RoomCode)?"PRACTICE":"ROOM "+session.RoomCode;
-            roomStatus.text=lobby?state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots":"Round "+state.round+" · "+state.fighters.Count(f=>f.alive)+" remaining";
+            roomStatus.text=lobby?state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots":state.livesMode&&local!=null?"Round "+state.round+" · "+(local.alive?local.lives+(local.lives==1?" life":" lives"):"Spectating"):"Round "+state.round+" · "+state.fighters.Count(f=>f.alive)+" remaining";
             fill.gameObject.SetActive(session.Hosting&&lobby);fill.interactable=!session.Busy;fillLabel.text=state.botFill?"Humans + bots":"Humans only";
             var mobileCamera=session.MobileCamera;bool running=mobileCamera!=null&&mobileCamera.Running;
             bool enabledIntent=mobileCamera!=null&&mobileCamera.CameraEnabledIntent,recovering=mobileCamera!=null&&mobileCamera.Recovering;
@@ -344,26 +359,29 @@ namespace Staredown
             captionPanel.gameObject.SetActive(connected&&!modal&&!string.IsNullOrEmpty(caption.text)&&(urgent||countdown||freshCaption));
             movementHint.gameObject.SetActive(connected&&!modal&&session.CanMove&&Time.unscaledTime<movementHintUntil);
             movementHint.text=local!=null&&!local.alive?"Left thumb: move outside fields · Swipe: look":"Left thumb: move · Swipe: look";
-            bool live=running&&connected&&!string.IsNullOrEmpty(session.RoomCode);
+            bool live=session.VideoSending&&!string.IsNullOrEmpty(session.RoomCode);
             cameraTag.text=connected?(previewExpanded?"YOUR CAMERA −":live?"YOU · LIVE +":"YOU +"):"YOUR CAMERA";
             cameraStatus.text=recovering?"Resuming camera…":!enabledIntent?"Camera off":!running?"Starting camera…":!mobileCamera.Valid?"Face not visible":!mobileCamera.Ready?"Calibrating "+mobileCamera.CalibrationPercent+"%":"Eyes tracked";
             cameraStatus.color=localReady?Cyan:enabledIntent?new Color(1,.76f,.47f):Muted;
             UpdateEyeStatus(state,local,running&&mobileCamera.Valid);
-            cameraPrivacy.text=live?"Shared in this room":enabledIntent?"Room video when joined":"Enable once to track blinks";
+            cameraPrivacy.text=live?"Video shared · eyes tracked":enabledIntent?(session.VideoSharingEnabled?"Video shared when joined":"Private video · eyes tracked"):"Enable once to track blinks";
             cameraPrivacy.gameObject.SetActive(!connected);cameraToggle.gameObject.SetActive(!connected);
             cameraToggleLabel.text=enabledIntent?"Camera settings":"Enable camera";
             preview.texture=mobileCamera!=null?mobileCamera.Preview:null;preview.enabled=running&&preview.texture!=null;
             if(preview.texture!=null)preview.GetComponent<AspectRatioFitter>().aspectRatio=(float)preview.texture.width/Mathf.Max(1,preview.texture.height);
             musicToggle.GetComponentInChildren<Text>().text=session.MusicEnabled?"Music on":"Music off";Selected(musicToggle,session.MusicEnabled);
             musicPercent.text=Mathf.RoundToInt(session.MusicVolume*100)+"%";syncingMusic=true;musicVolume.SetValueWithoutNotify(session.MusicVolume);syncingMusic=false;
-            var voice=session.Voice;mic.interactable=voiceToggle.interactable=voice!=null;
+            var voice=session.Voice;roomMic.interactable=mic.interactable=voiceToggle.interactable=voice!=null;
             micLabel.text=voice==null?"Microphone":!voice.MicPermissionGranted?"Enable mic":voice.MicMuted?"Unmute mic":"Mute mic";
+            roomMicLabel.text=voice==null?"Mic off":!voice.MicPermissionGranted?"Enable mic":!voice.VoiceEnabled?"Voice off":voice.MicMuted?"Mic off":"Mic on";
+            Selected(roomMic,voice!=null&&voice.MicPermissionGranted&&!voice.MicMuted&&voice.VoiceEnabled);
+            videoShareLabel.text=session.VideoSharingEnabled?"Video: shared":"Video: private";Selected(videoShare,session.VideoSharingEnabled);
             voiceLabel.text=voice!=null&&voice.VoiceEnabled?"Voice on":"Voice off";voiceStatus.text=voice!=null?voice.ReceiveSummary+"\nTap for voice check":"Join an online room for room chat.";
             if(voicePanel!=null&&voicePanel.gameObject.activeSelf)voiceDetails.text=voice!=null?voice.DiagnosticsSummary:"Join a room first.";
             portraitChoice.GetComponentInChildren<Text>().text="Portrait";landscapeChoice.GetComponentInChildren<Text>().text="Landscape";Selected(portraitChoice,!session.LandscapeMode);Selected(landscapeChoice,session.LandscapeMode);
             calibrate.interactable=running&&!recovering;
             cameraPower.GetComponentInChildren<Text>().text=enabledIntent?"Camera off":"Enable camera";
-            calibrationStatus.text=mobileCamera==null?"Front camera unavailable.":recovering?"Resuming the camera you enabled…":mobileCamera.Status;
+            calibrationStatus.text=mobileCamera==null?"Front camera unavailable.":recovering?"Resuming the camera you enabled…":mobileCamera.Status+"\n"+(session.VideoSharingEnabled?"Video shared with this room.":"Video private. Eye tracking stays on.");
             if(SettingsVisible)diagnosticsText.text=session.PerformanceSummary;
             settingsName.interactable=!connected||lobby;settingsLeave.gameObject.SetActive(connected);
             nameConfirm.interactable=StarePlayerName.IsValid(nameEditorInput.text)&&!session.Busy;
@@ -406,6 +424,13 @@ namespace Staredown
             if(active&&state.phase==(int)MatchPhase.Countdown)return "Get ready · "+Mathf.CeilToInt(state.remaining);
             if(active&&state.phase==(int)MatchPhase.Duel)return ""; // The live eye card owns tracking guidance.
             if(state.phase==(int)MatchPhase.Lobby)return "";
+            if(state.livesMode)
+            {
+                var pair=local.pair>=0&&local.pair<state.pairs.Length?state.pairs[local.pair]:null;
+                if(pair!=null&&pair.loser==local.id)return "Life lost · "+local.lives+" "+(local.lives==1?"life":"lives")+" left";
+                if(pair!=null&&pair.winner==local.id)return "Round won · "+local.lives+" "+(local.lives==1?"life":"lives")+" left";
+                return "Next opponent soon · "+local.lives+" "+(local.lives==1?"life":"lives");
+            }
             return "You advanced · next round soon";
         }
         void UpdateSafeArea()
@@ -418,7 +443,7 @@ namespace Staredown
             portrait=pixels.y>=pixels.x;float scale=(portrait?pixels.x:pixels.y)/600f;
             // Keep the complete entry/settings flow inside shorter tablet and
             // split-screen safe areas as well as the normal iPhone layout.
-            scale=Mathf.Max(.01f,Mathf.Min(scale,inset.height/(portrait?900f:570f)));
+            scale=Mathf.Max(.01f,Mathf.Min(scale,inset.height/(portrait?940f:620f)));
             scaler.uiScaleMode=CanvasScaler.ScaleMode.ConstantPixelSize;scaler.scaleFactor=scale;canvas.scaleFactor=scale;
             safe.anchorMin=new Vector2(inset.x/Mathf.Max(1,pixels.x),inset.y/Mathf.Max(1,pixels.y));safe.anchorMax=new Vector2(inset.xMax/Mathf.Max(1,pixels.x),inset.yMax/Mathf.Max(1,pixels.y));
             layoutSize=new Vector2(inset.width/scale,inset.height/scale);layoutReady=false;
@@ -431,10 +456,11 @@ namespace Staredown
 #endif
         void ApplyLayout(float width,float height,bool tall,bool connected,bool lobby,bool hosting)
         {
-            if(width<=0||height<=0)return;layoutReady=true;lastConnected=connected;lastLobby=lobby;lastHosting=hosting;
+            if(width<=0||height<=0)return;layoutReady=true;lastConnected=connected;lastLobby=lobby;lastHosting=hosting;lastCanThrow=session.CanThrow;
             const float margin=16;
             Place(settingsButton.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-margin,-12),new Vector2(connected?112:160,connected?64:70));
             StretchLabel(settingsButton.GetComponentInChildren<Text>(),6,3);Fit(settingsButton.GetComponentInChildren<Text>(),18,connected?21:23);
+            Place(roomMic.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-140,-12),new Vector2(120,64));StretchLabel(roomMicLabel,6,3);Fit(roomMicLabel,15,19);
             Put(brand,new Vector2(16,-13),new Vector2(width-190,36),30);Put(brandTag,new Vector2(18,-51),new Vector2(width-190,24),16);
             float homeWidth=tall?width-32:Mathf.Min(760,width-282);float homeTop=tall?88:82;float homeHeight=tall?784:Mathf.Min(484,height-homeTop-12);
             Place(home,new Vector2(0,1),new Vector2(0,1),new Vector2(margin,-homeTop),new Vector2(homeWidth,homeHeight));
@@ -498,14 +524,15 @@ namespace Staredown
                 Put(cameraPrivacy,new Vector2(12,-196),new Vector2(cameraWidth-24,16),11);
             }
             if(!contestPreview)cameraStatus.alignment=TextAnchor.UpperLeft;
-            float roomWidth=Mathf.Min(width-160,560);
+            float roomWidth=Mathf.Min(width-292,560);
             Place(roomBar,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-12),new Vector2(roomWidth,64));
             Put(roomLabel,new Vector2(12,-7),new Vector2(roomWidth-24,29),22);Put(roomStatus,new Vector2(12,-39),new Vector2(roomWidth-24,19),14);
             Place(start.GetComponent<RectTransform>(),new Vector2(.5f,0),new Vector2(.5f,0),new Vector2(0,48),new Vector2(152,64));StretchLabel(startLabel,7,4);Fit(startLabel,18,22);
-            Place(captionPanel,new Vector2(.5f,0),new Vector2(.5f,0),new Vector2(0,204),new Vector2(Mathf.Min(width-48,420),54));StretchLabel(caption,12,7);Fit(caption,16,22);
+            Place(captionPanel,new Vector2(.5f,0),new Vector2(.5f,0),new Vector2(0,session.CanThrow?318:204),new Vector2(Mathf.Min(width-48,420),54));StretchLabel(caption,12,7);Fit(caption,16,22);
             Place(joystick.GetComponent<RectTransform>(),Vector2.zero,Vector2.zero,new Vector2(28,52),new Vector2(144,144));
-            Place(dance.GetComponent<RectTransform>(),new Vector2(1,0),new Vector2(1,0),new Vector2(-20,48),new Vector2(134,60));
-            Place(dancePicker,new Vector2(1,0),new Vector2(1,0),new Vector2(-20,120),new Vector2(238,300));
+            Place(dance.GetComponent<RectTransform>(),new Vector2(1,0),new Vector2(1,0),new Vector2(-20,session.CanThrow?236:48),new Vector2(134,60));
+            Place(dancePicker,new Vector2(1,0),new Vector2(1,0),new Vector2(session.CanThrow&&!tall?-174:-20,session.CanThrow&&tall?308:120),new Vector2(238,300));
+            Place(slingPanel,new Vector2(1,0),new Vector2(1,0),new Vector2(-20,48),new Vector2(188,172));
             Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,10),new Vector2(width-40,30));Fit(movementHint,14,16);
             Place(lookHint.rectTransform,new Vector2(1,0),new Vector2(1,0),new Vector2(-174,59),new Vector2(tall?190:250,36));
             LayoutSettings(width,height,tall);LayoutName(width,height,tall);
@@ -516,8 +543,8 @@ namespace Staredown
         }
         void LayoutSettings(float width,float height,bool tall)
         {
-            float panelWidth=tall?width-32:Mathf.Min(800,width-32),panelHeight=tall?800:480;
-            float top=tall?84:Mathf.Max(76,(height-panelHeight)*.5f);
+            float panelWidth=tall?width-32:Mathf.Min(800,width-32),panelHeight=tall?840:520;
+            float top=Mathf.Max(84,(height-panelHeight)*.5f);
             Place(settingsPanel,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(0,-top),new Vector2(panelWidth,panelHeight));
             PlaceButton(settingsDone,panelWidth-110,14,90,64,20);
             float inner=panelWidth-40;bool showBots=session.Connected&&session.Hosting&&session.State.phase==(int)MatchPhase.Lobby;
@@ -528,8 +555,9 @@ namespace Staredown
                 float half=(inner-12)*.5f;PlaceButton(mic,20,216,half,58,20);PlaceButton(voiceToggle,32+half,216,half,58,20);Put(voiceStatus,new Vector2(20,-287),new Vector2(inner,52),14);
                 PlaceButton(portraitChoice,20,354,half,58,22);PlaceButton(landscapeChoice,32+half,354,half,58,22);
                 PlaceButton(calibrate,20,438,half,58,20);PlaceButton(cameraPower,32+half,438,half,58,20);Put(calibrationStatus,new Vector2(20,-508),new Vector2(inner,36),16);
-                Put(diagnosticsTitle,new Vector2(20,-556),new Vector2(inner,22),16);Put(diagnosticsText,new Vector2(20,-582),new Vector2(inner,80),12);
-                PlaceButton(settingsName,20,666,showBots?half:inner,50,20);PlaceButton(fill,32+half,666,half,50,18);PlaceButton(settingsLeave,20,730,inner,54,21);
+                PlaceButton(videoShare,20,552,inner,50,20);
+                Put(diagnosticsTitle,new Vector2(20,-616),new Vector2(inner,22),16);Put(diagnosticsText,new Vector2(20,-642),new Vector2(inner,56),12);
+                PlaceButton(settingsName,20,710,showBots?half:inner,50,20);PlaceButton(fill,32+half,710,half,50,18);PlaceButton(settingsLeave,20,776,inner,48,21);
             }
             else
             {
@@ -539,8 +567,8 @@ namespace Staredown
                 float half=(column-10)*.5f;PlaceButton(mic,20,206,half,56,18);PlaceButton(voiceToggle,30+half,206,half,56,18);Put(voiceStatus,new Vector2(20,-276),new Vector2(column,58),14);
                 PlaceButton(settingsName,20,354,showBots?half:column,50,17);PlaceButton(fill,30+half,354,half,50,17);PlaceButton(settingsLeave,20,418,column,48,20);
                 PlaceButton(portraitChoice,right,82,half,56,19);PlaceButton(landscapeChoice,right+half+10,82,half,56,19);
-                PlaceButton(calibrate,right,154,column,54,21);PlaceButton(cameraPower,right,218,column,54,21);Put(calibrationStatus,new Vector2(right,-286),new Vector2(column,36),16);
-                Put(diagnosticsTitle,new Vector2(right,-338),new Vector2(column,22),15);Put(diagnosticsText,new Vector2(right,-366),new Vector2(column,96),13);
+                PlaceButton(calibrate,right,154,column,54,21);PlaceButton(cameraPower,right,218,column,54,21);PlaceButton(videoShare,right,282,column,52,20);Put(calibrationStatus,new Vector2(right,-346),new Vector2(column,36),16);
+                Put(diagnosticsTitle,new Vector2(right,-394),new Vector2(column,22),15);Put(diagnosticsText,new Vector2(right,-420),new Vector2(column,80),12);
             }
         }
         void LayoutName(float width,float height,bool tall)

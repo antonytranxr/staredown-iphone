@@ -224,7 +224,15 @@ namespace Staredown
        if(frame==null||frame.kind!="cameraFrame"){CameraFramesDiscarded++;continue;}
        CameraFramesReceived++;
       }
-      else ReliablePacketsReceived++;
+      else
+      {
+       ReliablePacketsReceived++;
+       if(json.Contains("cameraProfile"))
+       {
+        WireMessage profile=null;try{profile=JsonUtility.FromJson<WireMessage>(json);}catch{}
+        if(profile!=null&&profile.kind=="cameraProfile"&&!profile.camera&&profile.id>=0&&(!hosting||profile.id==id))peer.assembler.ClearOrigin(profile.id);
+       }
+      }
       Enqueue(id,json);
      }
     }
@@ -276,6 +284,12 @@ namespace Staredown
   public bool Poll(out StareNetwork.Incoming packet){if(inbox.Count==0){packet=default;return false;}packet=inbox.Dequeue();return true;}
   void Queue(int id,Peer peer,WireMessage message,byte[] bytes,StareCameraPackets.Frame camera=null)
   {
+   if(message.kind=="cameraProfile"&&!message.camera&&message.id>=0)
+   {
+    // Privacy changes must discard video that is still waiting to be sent.
+    peer.cameraFrames.Remove(message.id);peer.assembler.ClearOrigin(message.id);
+    int waiting=peer.cameraOrder.Count;for(int n=0;n<waiting;n++){int origin=peer.cameraOrder.Dequeue();if(origin!=message.id)peer.cameraOrder.Enqueue(origin);}
+   }
    if(message.kind=="cameraFrame")
    {
     if(camera==null||message.id<0)return;

@@ -10,7 +10,7 @@ public static class StareExperiencePolishChecks
  public static string Countdown()
  {
   int n=0;Action<bool,string> check=(ok,label)=>{if(!ok)throw new Exception(label);n++;};
-  Func<Tournament> room=()=>{var t=new Tournament();t.Add(0,"HOST");t.Add(1,"GUEST");t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0);if(!t.Start())throw new Exception("Start fixture");return t;};
+  Func<Tournament> room=()=>{var t=new Tournament(1);t.Add(0,"HOST");t.Add(1,"GUEST");t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,0,0,0);if(!t.Start())throw new Exception("Start fixture");return t;};
   var match=room();int sequence=0;
   for(int i=0;i<110&&match.Phase==MatchPhase.Countdown;i++)
   {

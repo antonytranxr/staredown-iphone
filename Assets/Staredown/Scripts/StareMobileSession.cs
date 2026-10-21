@@ -17,6 +17,10 @@ namespace Staredown
   public bool HasPlayerName=>StarePlayerName.HasChosen;
   public bool MusicEnabled=>PlayerPrefs.GetInt("Staredown.MobileMusicEnabled",1)!=0;
   public float MusicVolume=>Mathf.Clamp01(PlayerPrefs.GetFloat("Staredown.MobileMusicVolume",.2f));
+  public bool VideoSharingEnabled=>PlayerPrefs.GetInt("Staredown.MobileShareVideo",1)!=0;
+  public bool VideoSending=>Connected&&!applicationPaused&&VideoSharingEnabled&&MobileCamera!=null&&MobileCamera.Running;
+  public bool CanThrow=>Connected&&!applicationPaused&&StareThrowAssist.CanThrow(State,LocalId);
+  public StareMobileSlingshot Slingshot {get;private set;}
   public bool LandscapeMode {get;private set;}
   public ArenaState State {get;private set;}=new ArenaState();
   public int LocalId {get;private set;}=-1;
@@ -44,8 +48,8 @@ namespace Staredown
   public StareCameraStream CameraHeads {get;private set;}
   Tournament model;IStareTransport transport;bool hostCapturedBlinks;
   readonly StareBlinkOutbox blinkOutbox=new StareBlinkOutbox();int generation,placed=-1,lastPhase=-1;
-  bool lastAlive=true,practice,practiceStarted,profileSent;float sendAt,yaw,pitch;Vector3 floor=new Vector3(0,0,-10);
-  AudioSource music,effects;AudioClip eliminationSound,victorySound;int effectPhase=-1,aliveCount=-1;
+  bool lastAlive=true,practice,practiceStarted,profileSent,applicationPaused;float sendAt,yaw,pitch;Vector3 floor=new Vector3(0,0,-10);
+  StareAnnouncer announcer;AudioSource music,effects;AudioClip eliminationSound,victorySound;int effectPhase=-1,aliveCount=-1;
   float nextPerformanceCheck;int appliedThermal=-1;
   double performanceWindow;int performanceFrames;
   void Awake()
@@ -66,7 +70,12 @@ namespace Staredown
   public void SetMusicEnabled(bool enabled)
   {PlayerPrefs.SetInt("Staredown.MobileMusicEnabled",enabled?1:0);PlayerPrefs.Save();if(music!=null)music.mute=!enabled;}
   public void SetMusicVolume(float volume)
-  {if(float.IsNaN(volume)||float.IsInfinity(volume))return;volume=Mathf.Clamp01(volume);PlayerPrefs.SetFloat("Staredown.MobileMusicVolume",volume);PlayerPrefs.Save();if(music!=null)music.volume=volume;}
+  {if(float.IsNaN(volume)||float.IsInfinity(volume))return;volume=Mathf.Clamp01(volume);PlayerPrefs.SetFloat("Staredown.MobileMusicVolume",volume);PlayerPrefs.Save();if(music!=null)music.volume=volume*(announcer!=null&&announcer.IsSpeaking?.30f:1);}
+  public void SetVideoSharing(bool enabled)
+  {
+   PlayerPrefs.SetInt("Staredown.MobileShareVideo",enabled?1:0);PlayerPrefs.Save();
+   if(Connected)SendProfile(VideoSending);
+  }
   void Start()
   {
    if(ViewCamera==null){var go=new GameObject("Mobile arena camera");ViewCamera=go.AddComponent<Camera>();}
@@ -78,6 +87,11 @@ namespace Staredown
    CameraHeads=gameObject.AddComponent<StareCameraStream>();
    Visuals=gameObject.AddComponent<StareVisuals>();Visuals.Build();Visuals.SetLocalViewer(ViewCamera.transform);Visuals.SetArenaTheme(0);HideVrMenus();
    Voice=gameObject.AddComponent<StareVoice>();Voice.Initialize(this);
+   announcer=gameObject.AddComponent<StareAnnouncer>();announcer.Initialize(this);
+   gameObject.AddComponent<StareDistractions>().Initialize(this);
+   gameObject.AddComponent<StareCompetitionPresentation>().Initialize(this,Visuals);
+   gameObject.AddComponent<StareFeedback>().Initialize(this);
+   Slingshot=gameObject.AddComponent<StareMobileSlingshot>();Slingshot.Initialize(this);
    var hud=gameObject.AddComponent<StareMobileHud>();hud.Initialize(this);
    music=gameObject.AddComponent<AudioSource>();music.clip=Resources.Load<AudioClip>("Audio/ArenaPulse");music.loop=true;music.volume=MusicVolume;music.mute=!MusicEnabled;music.spatialBlend=0;music.Play();
    effects=gameObject.AddComponent<AudioSource>();effects.playOnAwake=false;effects.volume=.5f;
@@ -134,7 +148,7 @@ namespace Staredown
   }
   public void Leave()
   {
-   MobileCamera?.SetContestActive(false);
+   MobileCamera?.SetContestActive(false);Slingshot?.Cancel();
    blinkOutbox.Clear();hostCapturedBlinks=false;generation++;transport?.Dispose();transport=null;model=null;LocalId=-1;Busy=false;RoomCode="";State=new ArenaState();CameraHeads?.Reset();profileSent=false;placed=-1;lastPhase=-1;practice=practiceStarted=false;MoveInput=LookInput=Vector2.zero;floor=new Vector3(0,0,-10);yaw=pitch=0;
    Status="Choose practice, create a room, or join friends.";
   }
@@ -147,7 +161,8 @@ namespace Staredown
    if(action=="calibrate"){MobileCamera.Calibrate();return;}
    if(action=="bot-fill"){if(model!=null&&State.phase==(int)MatchPhase.Lobby)model.SetBotFill(!model.BotFillEnabled);return;}
    if(action=="music"){SetMusicEnabled(!MusicEnabled);return;}
-   if(action=="mic"){Voice?.ToggleMic();return;}
+   if(action=="share-video"){SetVideoSharing(!VideoSharingEnabled);return;}
+   if(action=="mic"){if(Voice!=null){if(!Voice.VoiceEnabled){Voice.ToggleVoice();Voice.EnableMicrophone();}else if(!Voice.MicPermissionGranted)Voice.EnableMicrophone();else Voice.ToggleMic();}return;}
    if(action=="voice-reconnect"){Voice?.ReconnectVoice();return;}
    if(action=="voice"){Voice?.ToggleVoice();return;}
    if(action=="leave"){Leave();return;}
@@ -163,7 +178,13 @@ namespace Staredown
    profileSent=enabled;
   }
   void ForwardCamera(byte[] jpeg)
-  {if(Connected&&MobileCamera.Running)CameraHeads.Publish(jpeg,LocalId,model,transport,MobileCamera.Preview as Texture2D);}
+  {if(VideoSending)CameraHeads.Publish(jpeg,LocalId,model,transport,MobileCamera.Preview as Texture2D);}
+  public bool SendToss(Vector3 origin,Vector3 velocity,int prop)
+  {
+   if(!CanThrow||!Finite(origin.x)||!Finite(origin.y)||!Finite(origin.z)||!Finite(velocity.x)||!Finite(velocity.y)||!Finite(velocity.z))return false;
+   if(model!=null)return model.Throw(LocalId,prop,origin,velocity);
+   if(transport==null)return false;transport.Send(0,new WireMessage{kind="throw",origin=origin,velocity=velocity,prop=Mathf.Clamp(prop,0,2)});return true;
+  }
   void Pump()
   {
    if(transport==null)return;transport.Tick();StareNetwork.Incoming packet;
@@ -187,7 +208,7 @@ namespace Staredown
     }
     else
     {
-     if(message.kind=="welcome"){hostCapturedBlinks=message.capturedBlinks;LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(MobileCamera.Running);Status="Room "+RoomCode+". Explore and wait for the host.";}
+     if(message.kind=="welcome"){hostCapturedBlinks=message.capturedBlinks;LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(VideoSending);Status="Room "+RoomCode+". Explore and wait for the host.";}
      if(message.kind=="blinkAck"&&packet.sender==0)blinkOutbox.Acknowledge(message.blinkEvent,message.error);
      if(message.kind=="state"&&message.state!=null)State=message.state;
      if(message.kind=="disconnected"){string error=transport.Error;Leave();Status="Connection ended: "+error;break;}
@@ -208,7 +229,8 @@ namespace Staredown
    yaw+=LookInput.x;pitch=Mathf.Clamp(pitch-LookInput.y,-65,65);LookInput=Vector2.zero;
    if(CanMove){var movement=Quaternion.Euler(0,yaw,0)*new Vector3(MoveInput.x,0,MoveInput.y)*3*dt;floor=StareArenaFields.Clamp(State,floor+movement);}
    ViewCamera.transform.SetPositionAndRotation(floor+Vector3.up*1.6f,Quaternion.Euler(pitch,yaw,0));
-   if(Connected&&MobileCamera.Running!=profileSent)SendProfile(MobileCamera.Running);
+   if(Connected&&VideoSending!=profileSent)SendProfile(VideoSending);
+   if(music!=null){music.volume=MusicVolume*(announcer!=null&&announcer.IsSpeaking?.30f:1);music.mute=!MusicEnabled;}
    var presence=new StarePresenceFrame{headTracked=MobileCamera.Valid,head=Quaternion.Euler(MobileCamera.Pitch,MobileCamera.Yaw,0)};
    if(model!=null)
    {
@@ -218,13 +240,13 @@ namespace Staredown
    }
    if(transport is StareRelayNetwork relay)relay.SetRoomOpen(State.phase==0&&State.fighters.Count(f=>!f.bot)<Tournament.Capacity);
    if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",capturedBlinks=hostCapturedBlinks,left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove&&placed==LocalId,roomPosition=floor,roomYaw=yaw});}
-   SyncContestTracking();PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);Feedback();
+   SyncContestTracking();PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);if(GetComponent<StareFeedback>()==null)Feedback();
   }
   void CapturedBlink(int sequence,double capturedAt)
   {
    if(model==null&&!hostCapturedBlinks)return; // Older hosts keep the sequence protocol.
    var local=State.fighters.FirstOrDefault(f=>f.id==LocalId);
-   if(local==null||!local.alive||local.pair<0||State.phase!=(int)MatchPhase.Duel||State.trackingPaused)return;
+   if(!ActivePair(State,local)||State.phase!=(int)MatchPhase.Duel||State.trackingPaused)return;
    blinkOutbox.Record(State,sequence,capturedAt);
   }
   void FlushCapturedBlink()
@@ -237,8 +259,10 @@ namespace Staredown
   void SyncContestTracking()
   {
    var local=State.fighters.FirstOrDefault(f=>f.id==LocalId);
-   MobileCamera.SetContestActive(local!=null&&local.alive&&local.pair>=0&&State.phase==(int)MatchPhase.Duel);
+   MobileCamera.SetContestActive(ActivePair(State,local)&&State.phase==(int)MatchPhase.Duel);
   }
+  static bool ActivePair(ArenaState state,Fighter fighter)
+  {return state!=null&&fighter!=null&&fighter.alive&&fighter.pair>=0&&fighter.pair<state.pairs.Length&&state.pairs[fighter.pair].winner<0;}
   void PlaceForPhase()
   {
    var local=State.fighters.FirstOrDefault(f=>f.id==LocalId);if(local==null)return;
@@ -280,7 +304,8 @@ namespace Staredown
    // The camera provider owns pause/resume and remembers explicit user intent.
    // Permission dialogs must not become another Enable-camera step on joining.
    performanceWindow=0;performanceFrames=0;GameFrameRate=0;
-   if(paused){SendProfile(false);MoveInput=LookInput=Vector2.zero;}
+   applicationPaused=paused;
+   if(paused){Slingshot?.Cancel();SendProfile(false);MoveInput=LookInput=Vector2.zero;}
   }
   void OnDestroy(){generation++;transport?.Dispose();if(MobileCamera!=null){MobileCamera.FrameReady-=ForwardCamera;MobileCamera.BlinkCaptured-=CapturedBlink;}CameraHeads?.Reset();Screen.sleepTimeout=SleepTimeout.SystemSetting;}
 #if UNITY_EDITOR
