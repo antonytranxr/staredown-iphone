@@ -1,0 +1,23 @@
+{
+  "room": "1098",
+  "participants": 2,
+  "connected": true,
+  "channel": "staredown_room_v2_KpTNaKHcY7E6bEBBFEuMUY",
+  "peers": [
+    {
+      "name": "Mirror Test",
+      "self": true,
+      "muted": true,
+      "speaking": false,
+      "energy": 0.0
+    },
+    {
+      "name": "PLAYER 2",
+      "self": false,
+      "muted": false,
+      "speaking": false,
+      "energy": 0.0
+    }
+  ],
+  "limitation": "Reference Quest is not the affected friend's headset; no deliberate human speech sample or physical audibility proof"
+}

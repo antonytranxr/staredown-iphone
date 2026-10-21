@@ -19,9 +19,40 @@
     "hotIPhone": 3
   },
   "nativeLimitations": [
-    "Affected Quest not connected; microphone root cause and two-way native audio unconfirmed",
-    "Mirror frame budgets and thermal behavior tested synthetically; sustained device frame rate still needs verification",
-    "TestFlight upload not performed"
+    "Friend headset unavailable; root cause and physical microphone audibility on that unit unconfirmed",
+    "Reference Quest startup near72FPS while unworn is not sustained gameplay/mirror performance certification",
+    "TestFlight and GitHub were not updated for this request"
   ],
-  "editorKnownError": "StopSubsystems without initialized manager during non-XR desktop test teardown; no new gameplay/compile errors observed"
+  "editorKnownError": "StopSubsystems without initialized manager during non-XR desktop test teardown; no new gameplay/compile errors observed",
+  "questBuildResult": {
+    "result": "Succeeded",
+    "errors": 0,
+    "warnings": 8,
+    "bytes": 1905215340,
+    "duration": "00:09:19.2386650",
+    "path": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/outputs/Staredown-Quest-2026-10-20-v1.19.0.apk"
+  },
+  "installedQuest": {
+    "device": "230YC01D7V00N3",
+    "version": "1.19.0",
+    "code": 40,
+    "installedApkSha256": "2ad9890ee7906ddbb91b99fcc857f12f8472ecd32d92f2c74b294092a4e8f2d5",
+    "exactApkMatch": true
+  },
+  "installedIPhone": [
+    {
+      "appClip": false,
+      "builtByDeveloper": true,
+      "bundleIdentifier": "com.antony.staredown.mobile",
+      "bundleVersion": "12",
+      "defaultApp": false,
+      "hidden": false,
+      "internalApp": false,
+      "name": "Staredown Mobile",
+      "removable": true,
+      "url": "file:///private/var/containers/Bundle/Application/3895B3A9-3AFD-404E-B095-40DF9AB7D2BB/StaredownMobile.app/",
+      "version": "1.1.9"
+    }
+  ],
+  "nativeReferenceVoice": "Two clients joined actual Relay/Vivox room; Quest permission=true/focus=true/transmit=true, input Android System Capture Device, gain0. No deliberate speech sample. ConnectedQuest is not affected friend unit."
 }
