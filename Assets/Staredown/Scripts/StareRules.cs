@@ -194,7 +194,7 @@ namespace Staredown
         {var f=Find(id);if(f==null||f.bot||Phase!=MatchPhase.Lobby||skin<0||skin>3)return false;f.skin=skin;return true;}
         public bool Dance(int id,bool enabled,int choice=0)
         {
-            var f=Find(id);if(f==null||f.disconnected||choice<0||choice>3)return false;
+            var f=Find(id);if(f==null||f.disconnected||choice<0||choice>7)return false;
             f.dancing=enabled;f.dance=choice;return true;
         }
         public void Remove(int id)

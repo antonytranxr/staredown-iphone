@@ -59,7 +59,7 @@ namespace Staredown
                 if(winnerPresentation!=celebrate)
                 {winnerPresentation=celebrate;animator.cullingMode=celebrate?AnimatorCullingMode.AlwaysAnimate:AnimatorCullingMode.CullUpdateTransforms;foreach(var skin in skins)skin.updateWhenOffscreen=celebrate;}
                 string next=celebrate||fighter.dancing||rigChampion||!fighter.alive&&fighter.bot&&state.phase==(int)MatchPhase.Intermission?"Dance":social&&movement>.15f?"Walk":"Idle";
-                if(next=="Dance"&&fighter.dance>0)next="Dance"+fighter.dance;
+                if(next=="Dance")next=StareDanceCatalog.State(fighter.dance);
                 if(next!=animationState){if(rigChampion)animator.Play(next,0,0);else animator.CrossFadeInFixedTime(next,.18f,0);animationState=next;}
                 animator.speed=next=="Walk"?Mathf.Clamp(movement/1.2f,.65f,1.5f):1;
                 model.localScale=baseScale;model.localRotation=baseRotation;return;

@@ -14,7 +14,7 @@ namespace Staredown
   public bool NamePanelVisible=>namePanel!=null&&namePanel.gameObject.activeSelf;
   public string NameDraft=>nameDraft;
   TextMesh fpsSettingLabel;StareButton botFillButton;Transform danceChoices,skinsPanel;TextMesh progressionLabel,skinStatus;readonly List<StareButton> skinChoices=new List<StareButton>();
-  Transform danceAnchor;
+  Transform danceAnchor; readonly List<StareButton> danceOptions=new List<StareButton>(); StareButton danceStop; int selectedDance=-1;
   Transform openingVideo,inputLesson,controllerLesson,handLesson;TextMesh lessonTitle,lessonBody,lessonHint,openingModeLabel,calibrateLabel;StareButton openingPlay;
   public bool DanceChoicesVisible=>danceChoices!=null&&danceChoices.gameObject.activeSelf;
   public bool DanceAttachedTo(Transform anchor)=>DanceChoicesVisible&&danceChoices.parent==anchor;
@@ -250,8 +250,9 @@ namespace Staredown
    brightArenaButton.Interactable=moonlitArenaButton.Interactable=sunstoneArenaButton.Interactable=canChoose;
    arenaChoiceLabel.text=guest?"ARENA / CHOSEN BY THE HOST":canChoose?"ARENA / CHOOSE YOUR SETTING":"ARENA / LOCKED DURING MATCH";
   }
-  public void UpdateDanceControls(bool allowed,bool dancing)
-  {if(settingsDance!=null){settingsDance.Interactable=allowed;settingsDance.SetSelected(dancing);}if(matchDance!=null){matchDance.Interactable=allowed;matchDance.SetSelected(dancing);}}
+  public void UpdateDanceControls(bool allowed,bool dancing,int choice=0)
+  {if(settingsDance!=null){settingsDance.Interactable=allowed;settingsDance.SetSelected(dancing);}if(matchDance!=null){matchDance.Interactable=allowed;matchDance.SetSelected(dancing);}selectedDance=dancing?choice:-1;RefreshDanceSelection();}
+  void RefreshDanceSelection(){foreach(var option in danceOptions)option.SetSelected(option.action=="dance:"+selectedDance);if(danceStop!=null)danceStop.Interactable=selectedDance>=0;}
   public void SetSettingsStatus(string message){if(settingsStatus!=null)settingsStatus.text=message;}
   public void SetJoinStatus(string message){if(joinNoticeLabel!=null)joinNoticeLabel.text=message;}
   public void ShowJoinPanel(bool shown){if(joinPanel==null)return;if(namePanel!=null)namePanel.gameObject.SetActive(false);joinPanel.gameObject.SetActive(shown);settingsPanel.gameObject.SetActive(false);lobbyContents.gameObject.SetActive(!shown&&!OpeningInstructionsVisible);if(shown)SetJoinStatus("");}
@@ -357,21 +358,29 @@ namespace Staredown
    if(danceChoices==null)
    {
     danceChoices=Group("Quick dance picker",transform,Vector3.zero);
-    Panel("Dance picker surface",danceChoices,new Vector3(0,0,.008f),new Vector2(.32f,.36f),UISurface,UIAccent,.018f);
-    UILabel("DANCE",danceChoices,new Vector3(-.135f,.151f,-.015f),.008f,UIAccent,true);
-    var close=UIButton("×","dance-back",danceChoices,new Vector3(.132f,.15f,-.025f),new Vector2(.041f,.038f));
+    Panel("Dance picker surface",danceChoices,new Vector3(0,0,.008f),new Vector2(.40f,.40f),UISurface,UIAccent,.018f);
+    UILabel("DANCES",danceChoices,new Vector3(-.175f,.173f,-.015f),.008f,UIAccent,true);
+    var close=UIButton("×","dance-back",danceChoices,new Vector3(.173f,.173f,-.025f),new Vector2(.036f,.033f));
     close.GetComponentInChildren<TextMesh>().characterSize=.0038f;
-    string[] names={"Hip hop","Charleston","Lindy hop","Fancy footwork","Stop dancing"};
-    for(int i=0;i<names.Length;i++)
+    for(int group=0;group<2;group++)
     {
-     var button=UIButton(names[i],"dance:"+(i==4?-1:i),danceChoices,new Vector3(0,.098f-i*.054f,-.025f),new Vector2(.282f,.046f));
-     button.GetComponentInChildren<TextMesh>().characterSize=.0027f;
+     float top=.137f-group*.135f;
+     UILabel(StareDanceCatalog.Group(group),danceChoices,new Vector3(-.175f,top,-.015f),.0055f,UIAccent,true);
+     for(int cell=0;cell<4;cell++)
+     {
+      int id=StareDanceCatalog.DisplayId(group*4+cell);
+      var button=UIButton(StareDanceCatalog.Name(id),"dance:"+id,danceChoices,new Vector3(cell%2==0?-.093f:.093f,top-.033f-cell/2*.047f,-.025f),new Vector2(.176f,.040f));
+      button.GetComponentInChildren<TextMesh>().characterSize=.0021f;danceOptions.Add(button);
+     }
     }
+    danceStop=UIButton("Stop dancing","dance:-1",danceChoices,new Vector3(0,-.163f,-.025f),new Vector2(.362f,.040f));
+    danceStop.GetComponentInChildren<TextMesh>().characterSize=.0026f;
+
    }
    // Retain a constant physical size even on the scaled match menu.
    danceChoices.SetParent(anchor,false);MarkUiForCapture(danceChoices);Vector3 scale=anchor.lossyScale;
    danceChoices.localScale=new Vector3(1/scale.x,1/scale.y,1/scale.z);
-   danceAnchor=anchor;PositionDanceChoices(head);
+   danceAnchor=anchor;PositionDanceChoices(head);RefreshDanceSelection();
    danceChoices.gameObject.SetActive(true);
   }
   public static void MarkUiForCapture(Transform root){if(root!=null)StareFloorReflection.Mark(root,26);}
@@ -382,7 +391,7 @@ namespace Staredown
    var box=danceAnchor.GetComponent<BoxCollider>();float top=box==null?.04f:box.size.y*.5f*Mathf.Abs(danceAnchor.lossyScale.y);
    var toward=Vector3.ProjectOnPlane(danceAnchor.position-head.position,Vector3.up);
    if(toward.sqrMagnitude<.001f)toward=Vector3.ProjectOnPlane(head.forward,Vector3.up);
-   var normal=toward.normalized;var point=danceAnchor.position+Vector3.up*(top+.195f)-normal*.065f;
+   var normal=toward.normalized;var point=danceAnchor.position+Vector3.up*(top+.215f)-normal*.065f;
    point.y=Mathf.Max(point.y,head.position.y-.35f);
    danceChoices.SetPositionAndRotation(point,Quaternion.LookRotation(normal,Vector3.up));
   }

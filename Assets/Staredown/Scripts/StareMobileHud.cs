@@ -20,6 +20,7 @@ namespace Staredown
         Text fillLabel,startLabel,nameButtonLabel,cameraToggleLabel,nameTitle,nameHint,nameError,musicLabel,musicPercent,micLabel,voiceLabel,voiceStatus,calibrationStatus,diagnosticsTitle,diagnosticsText;
         InputField code,playerName,nameEditorInput;RawImage preview;Slider musicVolume;
         Button practice,host,join,leave,start,fill,dance,cameraToggle,cameraCard,cameraPower,editPlayerName,settingsButton,settingsDone,nameCancel,nameConfirm,musicToggle,mic,voiceToggle,portraitChoice,landscapeChoice,calibrate,settingsName,settingsLeave;
+        readonly Button[] danceOptions=new Button[StareDanceCatalog.Count];Button danceStop;
         StareMobileJoystick joystick;StareMobileLookPad lookPad;
         Vector2 lastScreen,layoutSize;Rect lastSafe;bool portrait,lastConnected,lastLobby,lastHosting,layoutReady,lastCanThrow;
         string pendingEntry="",pendingCode="",entryError="";bool syncingMusic;
@@ -181,9 +182,21 @@ namespace Staredown
             joystick=pad.gameObject.AddComponent<StareMobileJoystick>();joystick.Initialize(session,knob,49);
             movementHint=Label("",safe,Vector2.zero,Vector2.one,17,Color.white);lookHint=Label("Swipe to look",safe,Vector2.zero,Vector2.one,17,Muted,false,TextAnchor.MiddleRight);
             dance=ButtonElement("Dance",safe,Vector2.zero,new Vector2(144,64),()=>{session.Slingshot?.Cancel();dancePicker.gameObject.SetActive(!dancePicker.gameObject.activeSelf);});
-            dancePicker=Box("Quick dances",safe,new Vector2(1,0),Vector2.zero,new Vector2(238,300),new Vector2(1,0),Ink);
-            string[] options={"Hip hop","Charleston","Lindy hop","Fancy footwork","Stop dancing"};
-            for(int index=0;index<options.Length;index++){int choice=index==4?-1:index;var button=ButtonElement(options[index],dancePicker,new Vector2(10,-10-index*57),new Vector2(218,49),()=>{session.Act("dance:"+choice);dancePicker.gameObject.SetActive(false);});Fit(button.GetComponentInChildren<Text>(),17,21);}
+            dancePicker=Box("Quick dances",safe,new Vector2(1,0),Vector2.zero,new Vector2(300,350),new Vector2(1,0),Ink);
+            Label("DANCES",dancePicker,new Vector2(14,-12),new Vector2(220,24),18,Cyan,true);
+            ButtonElement("×",dancePicker,new Vector2(254,-8),new Vector2(36,36),()=>dancePicker.gameObject.SetActive(false));
+            for(int group=0;group<2;group++)
+            {
+                float top=46+group*124;
+                Label(StareDanceCatalog.Group(group),dancePicker,new Vector2(14,-top),new Vector2(260,20),13,Muted,true);
+                for(int cell=0;cell<4;cell++)
+                {
+                    int choice=StareDanceCatalog.DisplayId(group*4+cell);
+                    var button=ButtonElement(StareDanceCatalog.Name(choice),dancePicker,new Vector2(12+cell%2*142,-top-24-cell/2*48),new Vector2(134,44),()=>{session.Act("dance:"+choice);dancePicker.gameObject.SetActive(false);});
+                    StretchLabel(button.GetComponentInChildren<Text>(),5,3);Fit(button.GetComponentInChildren<Text>(),14,17);danceOptions[choice]=button;
+                }
+            }
+            danceStop=ButtonElement("Stop dancing",dancePicker,new Vector2(12,-294),new Vector2(276,44),()=>{session.Act("dance:-1");dancePicker.gameObject.SetActive(false);});
             dancePicker.gameObject.SetActive(false);
             slingPanel=Box("Touch slingshot",safe,new Vector2(1,0),Vector2.zero,new Vector2(188,172),new Vector2(1,0),Ink);
             slingTitle=Label("PULL & RELEASE",slingPanel,new Vector2(10,-10),new Vector2(168,26),16,Cyan,true,TextAnchor.MiddleCenter);
@@ -335,6 +348,9 @@ namespace Staredown
             if(session.Slingshot!=null){slingTitle.text=session.Slingshot.Hint;slingBall.GetComponent<Image>().color=Color.Lerp(Cyan,new Color(1,.8f,.3f),session.Slingshot.Strength);}
             lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(false);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
             dance.gameObject.SetActive(connected&&!modal);dance.interactable=session.CanDance;
+            var dancer=state.fighters.FirstOrDefault(f=>f.id==session.LocalId);bool isDancing=dancer!=null&&dancer.dancing;
+            for(int i=0;i<danceOptions.Length;i++)Selected(danceOptions[i],isDancing&&dancer.dance==i);
+            danceStop.interactable=isDancing;
             if(!connected||!session.CanDance||modal)dancePicker.gameObject.SetActive(false);
             bool validDraft=StarePlayerName.IsValid(playerName.text);
             homeHint.text=validDraft?"Shown above your avatar.":"Enter your name before playing.";
@@ -531,7 +547,7 @@ namespace Staredown
             Place(captionPanel,new Vector2(.5f,0),new Vector2(.5f,0),new Vector2(0,session.CanThrow?318:204),new Vector2(Mathf.Min(width-48,420),54));StretchLabel(caption,12,7);Fit(caption,16,22);
             Place(joystick.GetComponent<RectTransform>(),Vector2.zero,Vector2.zero,new Vector2(28,52),new Vector2(144,144));
             Place(dance.GetComponent<RectTransform>(),new Vector2(1,0),new Vector2(1,0),new Vector2(-20,session.CanThrow?236:48),new Vector2(134,60));
-            Place(dancePicker,new Vector2(1,0),new Vector2(1,0),new Vector2(session.CanThrow&&!tall?-174:-20,session.CanThrow&&tall?308:120),new Vector2(238,300));
+            Place(dancePicker,new Vector2(1,0),new Vector2(1,0),new Vector2(!tall?-174:-20,session.CanThrow&&tall?308:120),new Vector2(300,350));
             Place(slingPanel,new Vector2(1,0),new Vector2(1,0),new Vector2(-20,48),new Vector2(188,172));
             Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,10),new Vector2(width-40,30));Fit(movementHint,14,16);
             Place(lookHint.rectTransform,new Vector2(1,0),new Vector2(1,0),new Vector2(-174,59),new Vector2(tall?190:250,36));

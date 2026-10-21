@@ -107,3 +107,6 @@ Phone rendering is capped at 30 FPS and 1280 pixels on the long edge, with small
 This source update does not imply a new TestFlight upload. Apple's updated SDK/toolchain and signing requirements still apply.
 
 Unity iPhone export 1.1.0 build 2 succeeded with zero errors. The exported Xcode project includes the updated native camera bridge, microphone/camera usage declarations, ARKit linking, and SDK privacy bundle. A new native IPA and TestFlight upload have not been produced. Android phone packaging is intentionally deferred.
+
+## 2026-10-21 dance expansion (source only)
+Four new CMU mocap dances, eight choices total, with grouped compact VR/phone pickers. Shared source and animation assets match the Quest checkout byte for byte. Unity Editor checks covered all eight rigs, loop endpoints, valid network IDs, face/hand attachment, and portrait/landscape pointer targets. No new iPhone device build or TestFlight upload was made for this update. See `Validation/2026-10-21-dance-expansion/validation.json`.

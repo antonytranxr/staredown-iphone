@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-21",
+  "newDances": {
+    "4": "Swing step \u2014 CMU 93_04",
+    "5": "Kick step \u2014 CMU 93_05",
+    "6": "Rhythm wave \u2014 CMU 94_01",
+    "7": "Victory groove \u2014 CMU 94_02"
+  },
+  "avatars": 8,
+  "newClips": 32,
+  "selection": "Stable IDs 0\u20137; compact two-column Grooves/Swing groups, separate Stop and close, active highlight",
+  "checks": {
+    "assetBindingsLoopEndpointsFiniteCurvesAndWire": 20707,
+    "danceHands": 522,
+    "headMasksAndFacialRig": 384,
+    "mobileSelectionStopContainment": 26,
+    "mobilePortraitLandscapeAndVrPointerTargets": 26
+  },
+  "visualReview": "Four independent-frame renders across all eight presets. VR and portrait/landscape menu screenshots inspected. Landscape picker moved clear of selfie preview; VR long labels fitted.",
+  "importCache": "Refreshed 24 character model imports to regenerate head masks before full facial rig validation. No model or skin weights changed.",
+  "deviceGameplay": "Quest Pro installation/version and startup verified. Real eye-tracking mode detected; no game exceptions in startup log. Physical hand selection and sustained performance not verified.",
+  "build": "Quest 1.19.1 (41), successful with 0 errors; installed on connected Quest Pro."
+}

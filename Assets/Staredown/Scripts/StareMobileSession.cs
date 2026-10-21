@@ -166,7 +166,7 @@ namespace Staredown
    if(action=="voice-reconnect"){Voice?.ReconnectVoice();return;}
    if(action=="voice"){Voice?.ToggleVoice();return;}
    if(action=="leave"){Leave();return;}
-   if(action.StartsWith("dance:")){int dance;if(CanDance&&int.TryParse(action.Substring(6),out dance)&&dance>=-1&&dance<=3){if(model!=null)model.Dance(LocalId,dance>=0,Mathf.Max(0,dance));else transport?.Send(0,new WireMessage{kind="dance",dancing=dance>=0,dance=Mathf.Max(0,dance)});}return;}
+   if(action.StartsWith("dance:")){int dance;if(CanDance&&int.TryParse(action.Substring(6),out dance)&&dance>=-1&&dance<StareDanceCatalog.Count){if(model!=null)model.Dance(LocalId,dance>=0,Mathf.Max(0,dance));else transport?.Send(0,new WireMessage{kind="dance",dancing=dance>=0,dance=Mathf.Max(0,dance)});}return;}
   }
   bool RequirePlayerName()
   {if(HasPlayerName)return true;Status="Enter your name before entering the arena.";return false;}

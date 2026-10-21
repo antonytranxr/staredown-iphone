@@ -93,7 +93,7 @@ public static class StareCameraChecks
    Check(body.Length>0&&head.HiddenSkinnedRenderers==0&&body.All(renderer=>renderer.enabled==originallyEnabled[renderer]),"every merged skinned body/arm/leg surface retains its original visibility");
    var animator=actor.preset.GetComponent<Animator>();animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;animator.Rebind();animator.Update(0);
    var main=body.OrderBy(renderer=>renderer.sharedMesh.vertexCount).Last();
-   foreach(string clip in new[]{"Idle","Walk","Dance","Dance1","Dance2","Dance3"})
+   foreach(string clip in new[]{"Idle","Walk","Dance","Dance1","Dance2","Dance3","Dance4","Dance5","Dance6","Dance7"})
    {
     if(!animator.HasState(0,Animator.StringToHash(clip)))continue;
     for(int pose=0;pose<4;pose++)

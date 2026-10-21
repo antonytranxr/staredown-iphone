@@ -131,7 +131,7 @@ namespace Staredown
    if(action=="toss"||action=="throw-help"){spectatorTools.ShowHelp();return;}
    if(action=="dance"){if(CanDance)view.ShowDanceChoices(rig.centerEyeAnchor,!view.DanceChoicesVisible);return;}
    if(action=="dance-back"){view.ShowDanceChoices(rig.centerEyeAnchor,false);return;}
-   if(action.StartsWith("dance:")){int choice;if(CanDance&&int.TryParse(action.Substring(6),out choice)&&choice>=-1&&choice<=3){if(model!=null)model.Dance(localId,choice>=0,Mathf.Max(0,choice));else net?.Send(0,new WireMessage{kind="dance",dancing=choice>=0,dance=Mathf.Max(0,choice)});view.ShowDanceChoices(rig.centerEyeAnchor,false);}return;}
+   if(action.StartsWith("dance:")){int choice;if(CanDance&&int.TryParse(action.Substring(6),out choice)&&choice>=-1&&choice<StareDanceCatalog.Count){if(model!=null)model.Dance(localId,choice>=0,Mathf.Max(0,choice));else net?.Send(0,new WireMessage{kind="dance",dancing=choice>=0,dance=Mathf.Max(0,choice)});view.ShowDanceChoices(rig.centerEyeAnchor,false);}return;}
    if(action=="bot-fill"){if(model!=null&&InLobby&&net is StareRelayNetwork){model.SetBotFill(!model.BotFillEnabled);PlayerPrefs.SetInt("Staredown.BotFill",model.BotFillEnabled?1:0);PlayerPrefs.Save();}return;}
    if(action=="mic"){if(!voice.VoiceEnabled){voice.ToggleVoice();voice.EnableMicrophone();}else if(!voice.MicPermissionGranted)voice.EnableMicrophone();else voice.ToggleMic();return;}
    if(action=="voice-reconnect"){voice.ReconnectVoice();return;}
@@ -311,7 +311,7 @@ namespace Staredown
    view.SetPlayerNameLabel(StarePlayerName.Saved);
    view.SetArenaTheme(ArenaTheme);
    progression.Observe(State,localId,VoiceRoomId);view.UpdateSkinChoices(progression);
-   view.UpdateArenaSelection(ArenaTheme,CanChooseArena,localId>=0&&model==null);view.UpdateDanceControls(CanDance,Dancing);
+   view.UpdateArenaSelection(ArenaTheme,CanChooseArena,localId>=0&&model==null);view.UpdateDanceControls(CanDance,Dancing,State.fighters.FirstOrDefault(f=>f.id==localId)?.dance??0);
    view.UpdateState(State,localId,broadcast);
    cameraStream?.Sync(view,State,localId);
    view.UpdateMatchMenu(!lobby&&matchMenuOpen,State,localId,rig.centerEyeAnchor);

@@ -47,7 +47,7 @@ public static class StareExperienceChecks
     var fighter=new Fighter{bot=false,dancing=true,presenceAt=0,presence=new StarePresenceFrame{left=new StareHandPose{tracked=true,position=new Vector3(-.4f,-.2f,.4f),rotation=Quaternion.Euler(0,70,0)},right=new StareHandPose{tracked=true,position=new Vector3(.4f,-.2f,.4f),rotation=Quaternion.Euler(0,-70,0)}}};var state=new ArenaState{clock=0};
     // First establish tracking, then select a dance: no remaining IK blend may distort its hands.
     fighter.dancing=false;actor.presence.Observe(fighter,state,false);actor.presence.SendMessage("LateUpdate");fighter.dancing=true;
-    foreach(string clip in new[]{"Dance","Dance1","Dance2","Dance3"})
+    foreach(string clip in new[]{"Dance","Dance1","Dance2","Dance3","Dance4","Dance5","Dance6","Dance7"})
     {
      check(animator.HasState(0,Animator.StringToHash(clip)),"Dance state exists "+kind+" / "+clip);
      for(int sample=0;sample<3;sample++)

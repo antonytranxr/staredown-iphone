@@ -75,7 +75,7 @@ public static class StareExperiencePolishChecks
     }
     check(heads>10&&bodies>10,"Head is hidden independently of body "+kind);
     var samples=new Dictionary<SkinnedMeshRenderer,Vector3[]>();foreach(var probe in probes){var mesh=new Mesh();samples[probe.Item1]=probe.Item2.Select(i=>Quaternion.Inverse(head.rotation)*(SkinPoint(probe.Item1,i)-head.position)).ToArray();UnityEngine.Object.Destroy(mesh);}
-    foreach(string clip in new[]{"Idle","Walk","Dance","Dance1","Dance2","Dance3"})foreach(float pose in new[]{.25f,.65f})
+    foreach(string clip in new[]{"Idle","Walk","Dance","Dance1","Dance2","Dance3","Dance4","Dance5","Dance6","Dance7"})foreach(float pose in new[]{.25f,.65f})
     {
      animator.Play(clip,0,pose);animator.Update(.01f);float drift=0;
      foreach(var probe in probes){var mesh=new Mesh();for(int i=0;i<probe.Item2.Length;i++)drift=Mathf.Max(drift,Vector3.Distance(samples[probe.Item1][i],Quaternion.Inverse(head.rotation)*(SkinPoint(probe.Item1,probe.Item2[i])-head.position)));UnityEngine.Object.Destroy(mesh);}

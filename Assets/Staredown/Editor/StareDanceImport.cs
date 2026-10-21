@@ -5,12 +5,14 @@ using UnityEditor.Animations;
 using UnityEngine;
 public static class StareDanceImport
 {
- public static string Import()
+ public static string Import()=>ImportRange(1,7);
+ public static string ImportExtra()=>ImportRange(4,7);
+ static string ImportRange(int first,int last)
  {
   int count=0;foreach(string name in new[]{"Frost","Ember","Obsidian","Aurora","Knight","Mage","Rogue","Barbarian"})
   {
    var controller=AssetDatabase.LoadAssetAtPath<AnimatorController>("Assets/Staredown/Resources/StaredownAvatars/Animations/"+name+".controller");
-   for(int dance=1;dance<=3;dance++)
+   for(int dance=first;dance<=last;dance++)
    {
     string path="Assets/Staredown/Art/DanceSources/"+name+"_Dance"+dance+".fbx";var importer=(ModelImporter)AssetImporter.GetAtPath(path);importer.animationType=ModelImporterAnimationType.Generic;importer.importAnimation=true;var definitions=importer.defaultClipAnimations;
     foreach(var clip in definitions){clip.loopTime=true;clip.loopPose=true;clip.lockRootPositionXZ=true;clip.lockRootHeightY=true;clip.lockRootRotation=true;clip.keepOriginalOrientation=true;}importer.clipAnimations=definitions;importer.SaveAndReimport();
