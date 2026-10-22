@@ -181,6 +181,6 @@ namespace Staredown
   }
   void UpdatePads(ArenaState state)
   {for(int i=0;i<contenderPads.Count;i++){bool show=i<state.fighters.Length&&state.fighters[i].alive&&!state.finalRound;contenderPads[i].gameObject.SetActive(show);if(show)contenderPads[i].position=ArenaLayout.Seat(state,state.fighters[i].id);}}
-  void OnDestroy(){DisposeArenaFeed();DisposeInterface();DisposeEyeFeeds();Font.textureRebuilt-=RefreshFont;if(worldText!=null)Destroy(worldText);foreach(var m in artMeshes)if(m!=null)Destroy(m);foreach(var m in materials.Values)if(m!=null)Destroy(m);if(softGlow!=null)Destroy(softGlow);if(eyeMural!=null)Destroy(eyeMural);if(characterStudioEnvironment!=null)Destroy(characterStudioEnvironment);}
+  void OnDestroy(){DisposeInterface();DisposeEyeFeeds();Font.textureRebuilt-=RefreshFont;if(worldText!=null)Destroy(worldText);foreach(var m in artMeshes)if(m!=null)Destroy(m);foreach(var m in materials.Values)if(m!=null)Destroy(m);if(softGlow!=null)Destroy(softGlow);if(eyeMural!=null)Destroy(eyeMural);if(characterStudioEnvironment!=null)Destroy(characterStudioEnvironment);}
  }
 }

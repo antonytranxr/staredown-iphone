@@ -1,16 +1,18 @@
 {
-  "source_commit": "6777d75433910fa08400adbd5e8a214df1672350",
+  "source_commit": "5d2a28636aa958503391522f64d7dcefa2101848",
   "unity": "6000.3.26f1",
   "purpose": "Buildable iPhone app with shared VR game source",
   "generated_xcode_project_included": false,
   "signing_credentials_included": false,
-  "quest_version": "1.19.1",
-  "phone_version": "1.1.9",
-  "phone_build": "12",
+  "quest_version": "1.20.0",
+  "phone_version": "1.2.0",
+  "phone_build": "13",
   "iphone_overrides": [
-    "Unity6000.3.26f1 editor pin, compatible resolved package lock and serialized editor/importer migrations",
+    "Unity 6000.3.26f1 editor pin, compatible resolved package lock and serialized editor/importer migrations",
     "iPhone export menu with command-line build entry point",
-    "Minimum phone deployment targetiOS15; Quest checkout staysUnity6000.2.7f2"
+    "Minimum phone deployment target iOS 15; Quest checkout stays Unity 6000.2.7f2"
   ],
-  "source_update": "2026-10-21: four additional dances and compact grouped pickers. Phone version/build below is the last installed device build; this source update has not been packaged for iPhone."
+  "source_update": "2026-10-22: wide mirror, single-life 3D hearts, arena status board, mobile avatar preview and reconnect recovery. Quest 1.20.0 (42) installed on connected Pro; iPhone 1.2.0 (13) Xcode export succeeded. No new TestFlight upload or iPhone installation.",
+  "source_release": "release/v1.20.0",
+  "source_release_commit": "effffd0e098bf8c504ae1348ae3035a829d3182f"
 }

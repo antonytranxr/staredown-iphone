@@ -22,11 +22,12 @@ namespace Staredown
  public sealed class StareRelayNetwork : IStareTransport
  {
   const int MaxPacket=65536;
-  sealed class Peer { public NetworkConnection connection; public readonly Queue<byte[]> queue=new Queue<byte[]>(); public byte[] snapshot, input; public readonly Dictionary<int,StareCameraPackets.Frame> cameraFrames=new Dictionary<int,StareCameraPackets.Frame>();public bool packetVideo;public readonly StareCameraPackets.Assembler assembler=new StareCameraPackets.Assembler(); public readonly Queue<int> cameraOrder=new Queue<int>(); }
+  sealed class Peer { public NetworkConnection connection; public readonly Queue<byte[]> queue=new Queue<byte[]>(); public byte[] snapshot, input; public readonly Dictionary<int,StareCameraPackets.Frame> cameraFrames=new Dictionary<int,StareCameraPackets.Frame>();public bool packetVideo;public readonly StareCameraPackets.Assembler assembler=new StareCameraPackets.Assembler(); public readonly Queue<int> cameraOrder=new Queue<int>(); public float rejectAt; }
   readonly Dictionary<int,Peer> peers=new Dictionary<int,Peer>();
   readonly Queue<StareNetwork.Incoming> inbox=new Queue<StareNetwork.Incoming>();
   readonly List<int> peerIds=new List<int>();
-  NetworkDriver driver;NetworkPipeline pipeline,cameraPipeline,packetCameraPipeline;bool disposed,hosting,connected,hasRelay;int nextId;
+  NetworkDriver driver;NetworkPipeline pipeline,cameraPipeline,packetCameraPipeline;bool disposed,hosting,connected,hasRelay,welcomed;int nextId;
+  float connectedAt;bool expectWelcome;
   float started;static Task services;
   string directoryId;float heartbeatAt,directoryUpdateAt;Task heartbeat,directoryUpdate;
   bool roomOpen=true,publishedOpen=true;
@@ -37,6 +38,7 @@ namespace Staredown
   public string RoomCode {get;private set;}
   public string VoiceKey {get;private set;}
   public string Error {get;private set;}
+  public const float WelcomeTimeout=15;
   public int CameraDatagramsSent {get;private set;}
   public int CameraDatagramsReceived {get;private set;}
   public int PacketVideoPeers=>peers.Values.Count(x=>x.packetVideo);
@@ -62,13 +64,15 @@ namespace Staredown
     {
      try{return await LobbyService.Instance.QueryLobbiesAsync(new QueryLobbiesOptions
      {Count=10,Filters=new List<QueryFilter>{new QueryFilter(QueryFilter.FieldOptions.S1,code,QueryFilter.OpOptions.EQ),new QueryFilter(QueryFilter.FieldOptions.S2,DirectoryVersion,QueryFilter.OpOptions.EQ)}});}
-     catch(LobbyServiceException e)when(e.Reason==LobbyExceptionReason.RateLimited&&attempt<2){await Task.Delay(1500*(attempt+1));}
+     catch(LobbyServiceException e)when(RetryableLobby(e)&&attempt<2){await Task.Delay(1500*(attempt+1));}
     }
     throw new InvalidOperationException("ROOM SERVICE BUSY / TRY AGAIN IN A MOMENT");
    }
    finally{nextQueryAt=DateTime.UtcNow.AddSeconds(1.2);queryGate.Release();}
   }
   static DataObject PublicData(string value)=>new DataObject(DataObject.VisibilityOptions.Public,value);
+  static bool RetryableLobby(LobbyServiceException e)=>e.Reason==LobbyExceptionReason.RateLimited||e.Reason==LobbyExceptionReason.RequestTimeOut||e.Reason==LobbyExceptionReason.InternalServerError||e.Reason==LobbyExceptionReason.BadGateway||e.Reason==LobbyExceptionReason.ServiceUnavailable||e.Reason==LobbyExceptionReason.GatewayTimeout;
+  static bool RetryableRelay(RelayServiceException e)=>e.Reason==RelayExceptionReason.RateLimited||e.Reason==RelayExceptionReason.RequestTimeOut||e.Reason==RelayExceptionReason.NetworkError||e.Reason==RelayExceptionReason.InternalServerError||e.Reason==RelayExceptionReason.BadGateway||e.Reason==RelayExceptionReason.ServiceUnavailable||e.Reason==RelayExceptionReason.GatewayTimeout;
   async Task<string> PublishRoom(string relayCode)
   {
    // Relay's generated join code is alphanumeric. Lobby is a directory mapping
@@ -111,9 +115,36 @@ namespace Staredown
   {
    if(string.IsNullOrEmpty(Application.cloudProjectId))throw new InvalidOperationException("LINK UNITY CLOUD PROJECT TO ENABLE ONLINE ROOMS");
    if(UnityServices.State!=ServicesInitializationState.Initialized)await UnityServices.InitializeAsync();
-   if(!AuthenticationService.Instance.IsSignedIn)await AuthenticationService.Instance.SignInAnonymouslyAsync();
+   // IsSignedIn remains true after a token expires. Resume the saved session;
+   // do not clear its token or assign the returning player a new identity.
+   if(!AuthenticationService.Instance.IsAuthorized)await AuthenticationService.Instance.SignInAnonymouslyAsync();
   }
-  static Task EnsureServices(){if(services==null||services.IsFaulted||services.IsCanceled)services=InitializeServices();return services;}
+  static Task EnsureServices()
+  {
+   // Coalesce concurrent starts, but never let a completed task stand in for
+   // the current authorization state after a phone/headset has slept.
+   if(services!=null&&!services.IsCompleted)return services;
+   if(UnityServices.State==ServicesInitializationState.Initialized&&AuthenticationService.Instance.IsAuthorized)return Task.CompletedTask;
+   services=InitializeServices();return services;
+  }
+  public static string ConnectionError(Exception error)
+  {
+   if(Debug.isDebugBuild)Debug.LogWarning("[STARE ROOM CLOUD] "+error.GetType().Name+" reason="+(error is RelayServiceException re?re.Reason.ToString():error is LobbyServiceException le?le.Reason.ToString():"connection"));
+   if(error is ArgumentException||error is InvalidOperationException)return error.Message;
+   if(error is RelayServiceException relay)
+   {
+    if(relay.Reason==RelayExceptionReason.JoinCodeNotFound||relay.Reason==RelayExceptionReason.AllocationNotFound||relay.Reason==RelayExceptionReason.EntityNotFound||relay.Reason==RelayExceptionReason.Gone)return "ROOM HAS ENDED / ASK THE HOST FOR A NEW CODE";
+    if(relay.Reason==RelayExceptionReason.Conflict)return "ROOM FULL OR PREVIOUS CONNECTION CLEARING / WAIT 15 SECONDS AND REJOIN";
+    if(relay.Reason==RelayExceptionReason.Unauthorized)return "SIGN-IN EXPIRED / TRY JOINING AGAIN";
+    if(relay.Reason==RelayExceptionReason.RateLimited)return "ROOM SERVICE BUSY / WAIT A MOMENT AND REJOIN";
+   }
+   if(error is LobbyServiceException lobby)
+   {
+    if(lobby.Reason==LobbyExceptionReason.Unauthorized)return "SIGN-IN EXPIRED / TRY JOINING AGAIN";
+    if(lobby.Reason==LobbyExceptionReason.RateLimited)return "ROOM SERVICE BUSY / WAIT A MOMENT AND REJOIN";
+   }
+   return "ROOM CONNECTION FAILED / CHECK INTERNET AND TRY AGAIN";
+  }
   public async Task<string> HostAsync()
   {
    await EnsureServices();if(disposed)return null;
@@ -130,11 +161,20 @@ namespace Staredown
    code=NormalizeCode(code);if(!ValidCode(code))throw new ArgumentException("ENTER THE 4-DIGIT ROOM CODE");
    await EnsureServices();if(disposed)return;
    var result=await FindRoom(code);if(disposed)return;
-   if(result.Results.Count!=1)throw new InvalidOperationException(result.Results.Count==0?"ROOM NOT FOUND / CHECK CODE AND UPDATE BOTH APPS":"ROOM CODE UNAVAILABLE / ASK HOST TO CREATE A NEW ROOM");
+   // A just-created/reopened room can take a moment to appear in the directory.
+   if(result.Results.Count==0){await Task.Delay(1300);if(disposed)return;result=await FindRoom(code);if(disposed)return;}
+   if(result.Results.Count!=1)throw new InvalidOperationException(result.Results.Count==0?"ROOM NOT FOUND / CHECK CODE AND KEEP THE HOST IN THE GAME":"ROOM CODE UNAVAILABLE / ASK HOST TO CREATE A NEW ROOM");
    var room=result.Results[0];
-   if(!room.Data.TryGetValue("open",out var open)||open.Value!="yes")throw new InvalidOperationException("MATCH IN PROGRESS / JOIN AFTER THE MATCH");
+   // Directory updates are eventually consistent. Only the live host may
+   // reject admission: a stale 'closed' flag must not prevent a rejoin.
    if(!room.Data.TryGetValue("relay",out var relayCode))throw new InvalidOperationException("ROOM UNAVAILABLE / ASK HOST TO CREATE A NEW ROOM");
-   var allocation=await RelayService.Instance.JoinAllocationAsync(relayCode.Value);if(disposed)return;
+   JoinAllocation allocation=null;
+   for(int attempt=0;attempt<3&&!disposed;attempt++)
+   {
+    try{allocation=await RelayService.Instance.JoinAllocationAsync(relayCode.Value);break;}
+    catch(RelayServiceException e)when(RetryableRelay(e)&&attempt<2){await Task.Delay(1500*(attempt+1));}
+   }
+   if(disposed)return;
    VoiceKey=room.Id;
    var relay=AllocationUtils.ToRelayServerData(allocation,"dtls");StartRelay(relay,false);RoomCode=code;
   }
@@ -148,7 +188,7 @@ namespace Staredown
   }
   void StartRelay(RelayServerData relay,bool host)
   {
-   hasRelay=true;var settings=Settings();settings.WithRelayParameters(ref relay);
+   hasRelay=true;expectWelcome=!host;var settings=Settings();settings.WithRelayParameters(ref relay);
    CreateDriver(settings,host);settings.Dispose();
    if(!host)peers.Add(0,new Peer{connection=driver.Connect()});
   }
@@ -162,9 +202,9 @@ namespace Staredown
 #if UNITY_EDITOR
   // Exercises the identical framing/pipeline without depending on cloud services.
   bool testSimulator;
-  public void TestLocal(bool host,ushort port,int delayMs=0,int jitterMs=0,int dropPercent=0,uint seed=1)
+  public void TestLocal(bool host,ushort port,int delayMs=0,int jitterMs=0,int dropPercent=0,uint seed=1,bool requireWelcome=false)
   {
-   hosting=host;started=Time.realtimeSinceStartup;var settings=Settings();testSimulator=delayMs>0||jitterMs>0||dropPercent>0;if(testSimulator)settings.WithSimulatorStageParameters(maxPacketCount:256,maxPacketSize:1500,mode:ApplyMode.SentPacketsOnly,packetDelayMs:delayMs,packetJitterMs:jitterMs,packetDropPercentage:dropPercent,randomSeed:seed);driver=NetworkDriver.Create(settings);settings.Dispose();
+   hosting=host;expectWelcome=!host&&requireWelcome;started=Time.realtimeSinceStartup;var settings=Settings();testSimulator=delayMs>0||jitterMs>0||dropPercent>0;if(testSimulator)settings.WithSimulatorStageParameters(maxPacketCount:256,maxPacketSize:1500,mode:ApplyMode.SentPacketsOnly,packetDelayMs:delayMs,packetJitterMs:jitterMs,packetDropPercentage:dropPercent,randomSeed:seed);driver=NetworkDriver.Create(settings);settings.Dispose();
    CreatePipelines();
    if(driver.Bind(host?NetworkEndpoint.AnyIpv4.WithPort(port):NetworkEndpoint.AnyIpv4)!=0)throw new Exception("Test bind failed");
    if(host)driver.Listen();else peers.Add(0,new Peer{connection=driver.Connect(NetworkEndpoint.LoopbackIpv4.WithPort(port))});
@@ -194,6 +234,7 @@ namespace Staredown
    driver.ScheduleUpdate().Complete();
    if(hasRelay&&driver.GetRelayConnectionStatus()==RelayConnectionStatus.AllocationInvalid){Fail("ROOM EXPIRED / CREATE OR JOIN A NEW ROOM");return;}
    if((!hosting&&!connected||hosting&&!Bound)&&Time.realtimeSinceStartup-started>20){Fail("ROOM CONNECTION TIMED OUT / CHECK INTERNET");return;}
+   if(!hosting&&expectWelcome&&connected&&!welcomed&&Time.realtimeSinceStartup-connectedAt>WelcomeTimeout){Fail("HOST DID NOT RESPOND / KEEP THE HOST IN THE GAME AND REJOIN");return;}
    if(hosting)
    {
     NetworkConnection c;while((c=driver.Accept()).IsCreated)
@@ -206,16 +247,29 @@ namespace Staredown
     NetworkEvent.Type type;
     while((type=driver.PopEventForConnection(peer.connection,out var reader,out var receivedPipeline))!=NetworkEvent.Type.Empty)
     {
-     if(type==NetworkEvent.Type.Connect){connected=true;Event(id,"connected");}
-     else if(type==NetworkEvent.Type.Disconnect){Error=hosting?"PLAYER DISCONNECTED":"HOST LEFT OR CONNECTION LOST";peers.Remove(id);Event(id,"disconnected");break;}
+     if(type==NetworkEvent.Type.Connect){connected=true;connectedAt=Time.realtimeSinceStartup;Event(id,"connected");}
+     else if(type==NetworkEvent.Type.Disconnect)
+     {
+      var reason=reader.Length>0?(Unity.Networking.Transport.Error.DisconnectReason)reader.ReadByte():Unity.Networking.Transport.Error.DisconnectReason.Default;
+      Error=hosting?"PLAYER DISCONNECTED":DisconnectMessage(reason,welcomed);if(!hosting)connected=false;
+      if(Debug.isDebugBuild)Debug.Log("[STARE ROOM TRANSPORT] disconnect peer="+id+" reason="+reason+" admitted="+welcomed);
+      peers.Remove(id);Event(id,"disconnected");break;
+     }
      else if(type==NetworkEvent.Type.Data)
      {
+      if(peer.rejectAt>0)continue;
       bool packetVideo=receivedPipeline.Equals(packetCameraPipeline),preview=receivedPipeline.Equals(cameraPipeline);
       if(reader.Length<=0||reader.Length>(packetVideo?StareCameraPackets.Header+StareCameraPackets.Payload:preview||hosting?8192:MaxPacket)){ClosePeer(id);Event(id,"disconnected");break;}
       var bytes=new byte[reader.Length];reader.ReadBytes(bytes.AsSpan());
       if(packetVideo)
       {CameraDatagramsReceived++;WireMessage frame;if(peer.assembler.Add(bytes,Time.realtimeSinceStartupAsDouble,out frame)){CameraFramesReceived++;Enqueue(id,JsonUtility.ToJson(frame));}continue;}
       string json=Encoding.UTF8.GetString(bytes);
+      if(!preview&&!hosting&&(json.Contains("roomRejected")||!welcomed&&json.Contains("welcome")))
+      {
+       WireMessage admission=null;try{admission=JsonUtility.FromJson<WireMessage>(json);}catch{}
+       if(admission!=null&&admission.kind=="roomRejected"){Fail(string.IsNullOrEmpty(admission.error)?"ROOM FULL / WAIT FOR A PLAYER TO LEAVE":admission.error);return;}
+       if(admission!=null&&admission.kind=="welcome")welcomed=true;
+      }
       if(!preview&&json.Contains("videoCapabilities"))
       {WireMessage capabilities=null;try{capabilities=JsonUtility.FromJson<WireMessage>(json);}catch{}if(capabilities!=null&&capabilities.kind=="videoCapabilities"){peer.packetVideo=capabilities.videoProtocol==StareCameraPackets.Version;continue;}}
       if(preview)
@@ -236,10 +290,27 @@ namespace Staredown
       Enqueue(id,json);
      }
     }
-    if(peers.ContainsKey(id))Flush(id,peer);
+    if(peers.ContainsKey(id))
+    {
+     Flush(id,peer);
+     if(peer.rejectAt>0&&Time.realtimeSinceStartup>=peer.rejectAt){ClosePeer(id);Event(id,"disconnected");}
+    }
    }
   }
-  void Fail(string error){Error=error;Event(-1,"failed");if(driver.IsCreated)driver.Dispose();peers.Clear();}
+  static string DisconnectMessage(Unity.Networking.Transport.Error.DisconnectReason reason,bool admitted)
+  {
+   if(reason==Unity.Networking.Transport.Error.DisconnectReason.AuthenticationFailure)return "SECURE CONNECTION FAILED / CHECK INTERNET AND REJOIN";
+   if(reason==Unity.Networking.Transport.Error.DisconnectReason.Timeout||reason==Unity.Networking.Transport.Error.DisconnectReason.MaxConnectionAttempts)return "HOST CONNECTION TIMED OUT / KEEP THE HOST IN THE GAME AND REJOIN";
+   return admitted?"CONNECTION LOST / REJOIN WITH THE SAME ROOM CODE":"HOST COULD NOT ACCEPT THE CONNECTION / TRY JOINING AGAIN";
+  }
+  void StopDriver()
+  {
+   if(!driver.IsCreated)return;
+   foreach(var p in peers.Values)driver.Disconnect(p.connection);
+   // Complete the update that transmits disconnects before freeing the socket.
+   driver.ScheduleUpdate().Complete();driver.Dispose();
+  }
+  void Fail(string error){Error=error;Event(-1,"failed");StopDriver();connected=false;peers.Clear();}
   void Flush(int id,Peer peer)
   {
    for(int n=0;n<8;n++)
@@ -284,6 +355,7 @@ namespace Staredown
   public bool Poll(out StareNetwork.Incoming packet){if(inbox.Count==0){packet=default;return false;}packet=inbox.Dequeue();return true;}
   void Queue(int id,Peer peer,WireMessage message,byte[] bytes,StareCameraPackets.Frame camera=null)
   {
+   if(peer.rejectAt>0)return;
    if(message.kind=="cameraProfile"&&!message.camera&&message.id>=0)
    {
     // Privacy changes must discard video that is still waiting to be sent.
@@ -312,7 +384,15 @@ namespace Staredown
    var camera=message.kind=="cameraFrame"?StareCameraPackets.Encode(message):null;byte[] bytes=camera!=null?Array.Empty<byte>():Encoding.UTF8.GetBytes(JsonUtility.ToJson(message));if(bytes.Length>MaxPacket)return;
    peerIds.Clear();peerIds.AddRange(peers.Keys);foreach(int id in peerIds)if(peers.TryGetValue(id,out var peer))Queue(id,peer,message,bytes,camera);
   }
+  public void RejectPeer(int id,string reason)
+  {
+   if(!hosting||!peers.TryGetValue(id,out var peer)||peer.rejectAt>0)return;
+   // An immediate Disconnect discards the useful rejection message. Give the
+   // reliable stream time to deliver it, with a bounded release of the slot.
+   peer.queue.Clear();peer.input=peer.snapshot=null;peer.cameraFrames.Clear();peer.cameraOrder.Clear();
+   Send(id,new WireMessage{kind="roomRejected",error=reason});peer.rejectAt=Time.realtimeSinceStartup+1;
+  }
   public void ClosePeer(int id){if(peers.TryGetValue(id,out var p)){if(driver.IsCreated)driver.Disconnect(p.connection);peers.Remove(id);}}
-  public void Dispose(){disposed=true;if(driver.IsCreated){foreach(var p in peers.Values)driver.Disconnect(p.connection);driver.ScheduleUpdate().Complete();driver.Dispose();}peers.Clear();inbox.Clear();RoomCode=null;if(directoryId!=null){string id=directoryId;directoryId=null;_=DeleteDirectory(id);}}
+  public void Dispose(){disposed=true;StopDriver();connected=welcomed=false;peers.Clear();inbox.Clear();RoomCode=VoiceKey=null;if(directoryId!=null){string id=directoryId;directoryId=null;_=DeleteDirectory(id);}}
  }
 }

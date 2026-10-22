@@ -210,14 +210,7 @@ namespace Staredown
    }
    finally {if(generation==connectionGeneration&&this!=null&&(host||failed))roomBusy=false;}
   }
-  static string RoomError(Exception e)
-  {
-   if(e is ArgumentException||e is InvalidOperationException)return e.Message;
-   if(e is Unity.Services.Relay.RelayServiceException relay)
-   {if(relay.Reason==Unity.Services.Relay.RelayExceptionReason.JoinCodeNotFound||relay.Reason==Unity.Services.Relay.RelayExceptionReason.AllocationNotFound||relay.Reason==Unity.Services.Relay.RelayExceptionReason.EntityNotFound)return "ROOM NOT FOUND / CHECK CODE OR ASK HOST FOR A NEW ROOM";return "ROOM UNAVAILABLE / CHECK CODE, INTERNET AND AVAILABLE SPACE";}
-   if(e is Unity.Services.Lobbies.LobbyServiceException)return "ROOM SERVICE UNAVAILABLE / CHECK INTERNET AND TRY AGAIN";
-   return "ONLINE CONNECTION FAILED / CHECK INTERNET AND TRY AGAIN";
-  }
+  static string RoomError(Exception e)=>StareRelayNetwork.ConnectionError(e);
   void SelectAvatar(int choice)
   {
    selectedAvatar=choice;waitingForMeta=false;PlayerPrefs.SetInt("Staredown.Avatar",choice);PlayerPrefs.Save();
@@ -242,7 +235,7 @@ namespace Staredown
     if(m.kind=="failed"&&packet.sender<0) {string error=net.Error;Act("leave");notice="CONNECTION ENDED / "+error;break;}
     if(model!=null)
     {
-     if(m.kind=="connected") {if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){net.ClosePeer(packet.sender);continue;}net.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender,capturedBlinks=true});}
+     if(m.kind=="connected") {if(model.JoinHuman(packet.sender,"PLAYER "+(packet.sender+1))==null){if(net is StareRelayNetwork relay)relay.RejectPeer(packet.sender,"ROOM FULL / WAIT FOR A PLAYER TO LEAVE");else net.ClosePeer(packet.sender);continue;}net.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender,capturedBlinks=true,state=model.Snapshot()});}
      else if(m.kind=="blinkEvent")net.Send(packet.sender,new WireMessage{kind="blinkAck",blinkEvent=m.blinkEvent,error=model.AcceptCapturedBlink(packet.sender,m.blinkEvent)});
      else if(m.kind=="disconnected")model.Remove(packet.sender);
      else if(m.kind=="dance")model.Dance(packet.sender,m.dancing,m.dance);
@@ -261,7 +254,7 @@ namespace Staredown
     }
     else
     {
-     if(m.kind=="welcome"){roomBusy=false;localId=m.id;net?.Send(0,new WireMessage{kind="name",name=StarePlayerName.Saved});if(Debug.isDebugBuild)Debug.Log("[STARE ROOM] joined code="+roomCode+" player="+localId);SendAvatarSelection();notice="ROOM "+roomCode+" / CONNECTED / WAIT FOR HOST";}
+     if(m.kind=="welcome"){roomBusy=false;localId=m.id;if(m.state!=null)State=m.state;net?.Send(0,new WireMessage{kind="name",name=StarePlayerName.Saved});if(Debug.isDebugBuild)Debug.Log("[STARE ROOM] joined code="+roomCode+" player="+localId);SendAvatarSelection();notice=State.phase!=(int)MatchPhase.Lobby?"ROOM "+roomCode+" / SPECTATING / PLAY NEXT MATCH":"ROOM "+roomCode+" / CONNECTED / WAIT FOR HOST";}
      if(m.kind=="state"&&m.state!=null)State=m.state;
      if(m.kind=="avatarPose"&&m.id!=localId&&State.fighters.Any(f=>f.id==m.id&&f.avatar==StareAvatarCatalog.Meta))
      {byte[] pose;if(TryPose(m.pose,out pose))pendingAvatarPoses[m.id]=pose;}
@@ -300,7 +293,7 @@ namespace Staredown
     model.Tick(dt);State=model.Snapshot();
    }
    SyncPlacement();
-   if(net is StareRelayNetwork room)room.SetRoomOpen(InLobby&&State.fighters.Count(f=>!f.bot)<Tournament.Capacity);
+   if(net is StareRelayNetwork room)room.SetRoomOpen(model!=null&&model.CanAdmitHuman);
    if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;
     if(model!=null)net?.Broadcast(new WireMessage{kind="state",state=State});
     else if(localId>=0)net?.Send(0,new WireMessage{kind="input",left=eyes.Left,right=eyes.Right,valid=eyes.Valid,ready=eyes.Ready,blink=eyes.BlinkSequence,yaw=eyes.Yaw,pitch=eyes.Pitch,demo=eyes.simulated,presence=bodyFrame,hasRoomPose=CanMove&&placedPlayerId==localId,roomPosition=LocalFloor,roomYaw=rig.centerEyeAnchor.eulerAngles.y});

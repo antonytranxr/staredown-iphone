@@ -35,9 +35,9 @@ public static class StareExperiencePolishChecks
    nav.HandleMicrogesture(OVRHand.MicrogestureType.SwipeLeft,0);check(Vector3.Dot(head.position-before,right)<-.44f&&Quaternion.Angle(rig.rotation,rotation)<.001f,"Left-hand swipe left strafes without rotation");
    before=head.position;nav.HandleMicrogesture(OVRHand.MicrogestureType.SwipeRight,0);check(Vector3.Dot(head.position-before,right)>.44f&&Quaternion.Angle(rig.rotation,rotation)<.001f,"Left-hand swipe right strafes without rotation");
    nav.HandleMicrogesture(OVRHand.MicrogestureType.SwipeRight,1);check(Mathf.Abs(Quaternion.Angle(rig.rotation,rotation)-30)<.01f,"Right-hand snap turn remains available");
-   check(view.ArenaFeed!=null&&view.ArenaFeed.width>=2048&&view.ArenaFeed.height>=576,"Exploration feed has upgraded resolution");
+   check(view.ScoreboardMode&&view.ArenaFeed==null,"Direct tournament board needs no arena render texture");
    var mirror=view.GetComponentInChildren<StareArenaMirror>();mirror.Capture(head.GetComponent<Camera>());var feeds=(RenderTexture[])typeof(StareArenaMirror).GetField("feeds",Private).GetValue(mirror);
-   check(feeds.All(feed=>feed!=null&&feed.width>=1024&&feed.height>=1536),"Mirror has high resolution for both eyes");
+   check(feeds.All(feed=>feed!=null&&feed.width==1536&&feed.height==1024),"Wider mirror uses landscape textures at the previous pixel budget");
    if(game.State.fighters.Length>=2)
    {
     typeof(StareVisuals).GetMethod("CaptureSelectedEyes",Private).Invoke(view,new object[]{game.State.fighters[0],game.State.fighters[1]});var eyes=(RenderTexture[])typeof(StareVisuals).GetField("eyeFeeds",Private).GetValue(view);

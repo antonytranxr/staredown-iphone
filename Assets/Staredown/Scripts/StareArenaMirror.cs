@@ -72,7 +72,8 @@ namespace Staredown
   public void Capture(Camera source)
   {
    if(rendering||source==null)return;rendering=true;bool invert=GL.invertCulling;double started=Time.realtimeSinceStartupAsDouble;
-   if(capture==null){var node=new GameObject("Arena mirror capture");node.transform.SetParent(owner.transform,false);capture=node.AddComponent<Camera>();capture.enabled=false;for(int i=0;i<(phone?1:2);i++){feeds[i]=new RenderTexture(phone?512:1024,phone?768:1536,16){name="Arena mirror eye "+i,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=phone?2:4};feeds[i].Create();}surface.SetTexture("_MirrorLeft",feeds[0]);surface.SetTexture("_MirrorRight",phone?feeds[0]:feeds[1]);}
+   // Match the wider portal while retaining the previous total pixel budget.
+   if(capture==null){var node=new GameObject("Arena mirror capture");node.transform.SetParent(owner.transform,false);capture=node.AddComponent<Camera>();capture.enabled=false;for(int i=0;i<(phone?1:2);i++){feeds[i]=new RenderTexture(phone?768:1536,phone?512:1024,16){name="Arena mirror eye "+i,filterMode=FilterMode.Trilinear,useMipMap=true,autoGenerateMips=true,anisoLevel=phone?2:4};feeds[i].Create();}surface.SetTexture("_MirrorLeft",feeds[0]);surface.SetTexture("_MirrorRight",phone?feeds[0]:feeds[1]);}
    var local=owner.LocalAvatar;var detail=local!=null?local.preset.GetComponent<LODGroup>():null;if(detail!=null&&detail.enabled&&detail.gameObject.activeInHierarchy)detail.ForceLOD(0);
    owner.SetLocalMetaCapture(true);
    try

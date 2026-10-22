@@ -73,7 +73,7 @@ public static class StareRoomChecks
   t.Input(1,1,1,true,true,1,0,0,true);
   for(int i=0;i<90;i++){t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,1,0,0,true);t.Tick(.05f);}
   Check(t.Phase==MatchPhase.Champion&&t.Winner==0,"winner celebration occurs before returning");
-  for(int i=0;i<125;i++){t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,1,0,0,true);t.Tick(.05f);}
+  for(int i=0;i<200&&t.Phase!=MatchPhase.Lobby;i++){t.Input(0,0,0,true,true,0,0,0);t.Input(1,0,0,true,true,1,0,0,true);t.Tick(.05f);}
   Check(t.Phase==MatchPhase.Lobby&&t.Winner==0&&t.Fighters.Count==2&&t.Fighters.TrueForAll(f=>f.alive&&f.pair==-1&&!f.hasRoomPose)&&t.Pairs.Count==0&&!t.FinalRound,"winner and loser return together with roster retained and pads reset");
   Check(t.RoomPose(1,new Vector3(-3,0,2),35)&&t.Start(),"former spectator can roam then play a rematch");
   t.Remove(1);for(int i=0;i<400;i++){t.Input(0,0,0,true,true,0,0,0);t.Tick(.05f);}

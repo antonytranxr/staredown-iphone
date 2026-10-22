@@ -1,0 +1,4 @@
+STARTED
+51 local UTP repeated leave/rejoin, spectator admission, directory and rejection checks passed
+52 live Relay repeated leave/rejoin, spectator admission, directory and rejection checks passed
+DONE

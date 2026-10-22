@@ -13,6 +13,8 @@ namespace Staredown
         static readonly Color Ink=new Color(.025f,.045f,.07f,.96f),Surface=new Color(.065f,.105f,.145f,.98f),Cyan=new Color(.25f,.94f,1),Muted=new Color(.67f,.77f,.82f);
         StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
         RectTransform voicePanel;Text voiceDetails;Button voiceRepair,voiceDone;
+        RectTransform avatarPanel,avatarFrame;RawImage avatarImage;Text avatarTitle,avatarName,avatarTagline,avatarIndex,avatarHint;
+        Button avatarEntry,settingsAvatar,avatarPrevious,avatarNext,avatarUse,avatarCancel;StareMobileAvatarPreview avatarStudio;int avatarDraft;
         RectTransform leftEyeChip,rightEyeChip,trackingGrace,trackingGraceFill;Text leftEyeText,rightEyeText,eyeGuidance;
         RectTransform safe,homeShade,home,homeIntro,nameCard,playCard,homeStatusPanel,roomBar,cameraPanel,cameraFrame,captionPanel,dancePicker,nameEditor,settingsPanel,scrim;
         Text playTitle,joinHint,roomMicLabel,videoShareLabel,slingTitle,slingHint;RectTransform slingPanel,slingBall;StareMobileSlingPad slingPad;Button roomMic,videoShare;
@@ -35,6 +37,17 @@ namespace Staredown
         public bool HomeVisible=>home!=null&&home.gameObject.activeSelf;
         public bool NameEditorVisible=>nameEditor!=null&&nameEditor.gameObject.activeSelf;
         public bool SettingsVisible=>settingsPanel!=null&&settingsPanel.gameObject.activeSelf;
+        public bool AvatarPickerVisible=>avatarPanel!=null&&avatarPanel.gameObject.activeSelf;
+        public RectTransform AvatarPanelRect=>avatarPanel;
+        public RawImage AvatarPreview=>avatarImage;
+        public Button AvatarEntryButton=>avatarEntry;
+        public Button SettingsAvatarButton=>settingsAvatar;
+        public Button AvatarPreviousButton=>avatarPrevious;
+        public Button AvatarNextButton=>avatarNext;
+        public Button AvatarUseButton=>avatarUse;
+        public Button AvatarCancelButton=>avatarCancel;
+        public int PreviewAvatar=>avatarDraft;
+        public StareMobileAvatarPreview AvatarStudio=>avatarStudio;
         public bool IsPortraitLayout=>portrait;
         public Vector2 LayoutSize=>layoutSize;
         public RectTransform SafeAreaRect=>safe;
@@ -123,6 +136,7 @@ namespace Staredown
             playerName.onValueChanged.AddListener(value=>entryError="");
             playerName.onEndEdit.AddListener(value=>playerName.SetTextWithoutNotify(StarePlayerName.Clean(value)));
             homeHint=Label("Shown above your avatar.",nameCard,Vector2.zero,Vector2.one,16,Muted);
+            avatarEntry=ButtonElement("Choose character",nameCard,Vector2.zero,Vector2.one,()=>ShowAvatarPicker(true));
             playCard=Box("Play with friends",home,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Ink);
             playTitle=Label("Play with friends",playCard,Vector2.zero,Vector2.one,22,Color.white,true);
             joinHint=Label("HAVE A ROOM CODE?",playCard,Vector2.zero,Vector2.one,14,Muted,true);
@@ -209,7 +223,7 @@ namespace Staredown
         void BuildModals()
         {
             scrim=Box("Modal backdrop",safe,Vector2.zero,Vector2.zero,Vector2.one,Vector2.zero,new Color(.006f,.012f,.025f,.76f));scrim.anchorMin=Vector2.zero;scrim.anchorMax=Vector2.one;scrim.offsetMin=scrim.offsetMax=Vector2.zero;scrim.gameObject.SetActive(false);
-            BuildSettings();BuildNameEditor();BuildVoiceCheck();
+            BuildSettings();BuildNameEditor();BuildVoiceCheck();BuildAvatarPicker();
         }
         void BuildSettings()
         {
@@ -231,9 +245,56 @@ namespace Staredown
             calibrationStatus=Label("",settingsPanel,Vector2.zero,Vector2.one,18,Muted);
             diagnosticsTitle=Label("TRACKING DIAGNOSTICS",settingsPanel,Vector2.zero,Vector2.one,16,Cyan,true);
             diagnosticsText=Label("",settingsPanel,Vector2.zero,Vector2.one,14,Muted);
-            settingsName=ButtonElement("Edit your name",settingsPanel,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));settingsLeave=ButtonElement("Leave room",settingsPanel,Vector2.zero,Vector2.one,()=>{ShowSettings(false);session.Leave();});
+            settingsAvatar=ButtonElement("Character",settingsPanel,Vector2.zero,Vector2.one,()=>ShowAvatarPicker(true));
+            settingsName=ButtonElement("Edit name",settingsPanel,Vector2.zero,Vector2.one,()=>ShowNameEditor(true));settingsLeave=ButtonElement("Leave room",settingsPanel,Vector2.zero,Vector2.one,()=>{ShowSettings(false);session.Leave();});
             fill.transform.SetParent(settingsPanel,false);
         }
+        void BuildAvatarPicker()
+        {
+            avatarPanel=Box("Choose your contender",safe,new Vector2(.5f,.5f),Vector2.zero,Vector2.one,new Vector2(.5f,.5f),Ink);
+            avatarPanel.GetComponent<Image>().color=new Color(Ink.r,Ink.g,Ink.b,1);
+            avatarTitle=Label("Your contender",avatarPanel,Vector2.zero,Vector2.one,28,Color.white,true);
+            avatarFrame=Box("Character showcase",avatarPanel,new Vector2(0,1),Vector2.zero,Vector2.one,new Vector2(0,1),Surface);
+            avatarFrame.GetComponent<Image>().raycastTarget=false;
+            var image=LayoutRect("Selected avatar",avatarFrame,Vector2.zero,Vector2.one,new Vector2(4,4),new Vector2(-4,-4));
+            avatarImage=image.gameObject.AddComponent<RawImage>();avatarImage.raycastTarget=false;
+            image.gameObject.AddComponent<AspectRatioFitter>().aspectMode=AspectRatioFitter.AspectMode.FitInParent;
+            avatarName=Label("",avatarPanel,Vector2.zero,Vector2.one,32,Color.white,true,TextAnchor.MiddleCenter);
+            avatarTagline=Label("",avatarPanel,Vector2.zero,Vector2.one,17,Muted,false,TextAnchor.MiddleCenter);
+            avatarIndex=Label("",avatarPanel,Vector2.zero,Vector2.one,15,Muted,true,TextAnchor.MiddleCenter);
+            avatarHint=Label("Your camera appears on this avatar when video is shared.",avatarPanel,Vector2.zero,Vector2.one,15,Muted,false,TextAnchor.MiddleCenter);
+            avatarPrevious=ButtonElement("‹",avatarPanel,Vector2.zero,Vector2.one,()=>CycleAvatar(-1));
+            avatarNext=ButtonElement("›",avatarPanel,Vector2.zero,Vector2.one,()=>CycleAvatar(1));
+            avatarUse=ButtonElement("Use character",avatarPanel,Vector2.zero,Vector2.one,()=>{session.SelectAvatar(avatarDraft);ShowAvatarPicker(false);},true);
+            avatarCancel=ButtonElement("Cancel",avatarPanel,Vector2.zero,Vector2.one,()=>ShowAvatarPicker(false));
+            avatarStudio=gameObject.AddComponent<StareMobileAvatarPreview>();avatarStudio.Initialize(session.Visuals,avatarImage);
+            avatarPanel.gameObject.SetActive(false);
+        }
+        public void ShowAvatarPicker(bool shown)
+        {
+            if(avatarPanel==null)return;
+            if(shown)
+            {
+                if(!session.CanSelectAvatar)return;
+                ShowSettings(false);ShowNameEditor(false);PauseTouches();playerName.DeactivateInputField();code.DeactivateInputField();
+                avatarDraft=session.SelectedAvatar;avatarPanel.gameObject.SetActive(true);RefreshAvatarPreview();
+            }
+            else {avatarPanel.gameObject.SetActive(false);avatarStudio?.Hide();}
+            UpdateModal();
+        }
+        public void CycleAvatar(int direction)
+        {
+            if(!AvatarPickerVisible||!session.CanSelectAvatar)return;
+            avatarDraft=StareAvatarCatalog.PresetId(StareAvatarCatalog.PresetSlot(avatarDraft)+direction);RefreshAvatarPreview();
+        }
+        void RefreshAvatarPreview()
+        {
+            string name=AvatarName(avatarDraft);avatarName.text=name;avatarName.color=StareAvatarCatalog.Colors[avatarDraft];
+            avatarTagline.text=StareAvatarCatalog.ShortDescriptions[avatarDraft];avatarIndex.text=(StareAvatarCatalog.PresetSlot(avatarDraft)+1)+" / "+StareAvatarCatalog.PresetCount;
+            avatarUse.GetComponentInChildren<Text>().text="Use "+name;avatarStudio.Show(avatarDraft);
+        }
+        static string AvatarName(int id)
+        {string name=StareAvatarCatalog.Names[id].ToLowerInvariant();return char.ToUpperInvariant(name[0])+name.Substring(1);}
         void BuildVoiceCheck()
         {
             voicePanel=Box("Voice check",safe,new Vector2(.5f,.5f),Vector2.zero,new Vector2(500,560),new Vector2(.5f,.5f),Ink);
@@ -295,7 +356,7 @@ namespace Staredown
         }
         void OpenNameEditor(string value,string action)
         {
-            settingsPanel.gameObject.SetActive(false);pendingEntry=action;nameEditorInput.SetTextWithoutNotify(value);nameError.text="";
+            ShowAvatarPicker(false);settingsPanel.gameObject.SetActive(false);pendingEntry=action;nameEditorInput.SetTextWithoutNotify(value);nameError.text="";
             nameTitle.text=action.Length>0?"Enter as this name?":"Your arena name";
             nameHint.text="Everyone in the room will see this name.";
             nameConfirm.GetComponentInChildren<Text>().text=action=="join"?"Join room":action=="host"?"Create room":action=="practice"?"Start practice":"Save name";
@@ -312,7 +373,7 @@ namespace Staredown
         }
         public void ShowSettings(bool shown)
         {
-            if(shown){ShowNameEditor(false);PauseTouches();}
+            if(shown){ShowAvatarPicker(false);ShowNameEditor(false);PauseTouches();}
             settingsPanel.gameObject.SetActive(shown);if(!shown&&voicePanel!=null)voicePanel.gameObject.SetActive(false);UpdateModal();
         }
         void CameraSetup()
@@ -326,7 +387,7 @@ namespace Staredown
             ApplyLayout(layoutSize.x,layoutSize.y,portrait,true,session.State.phase==(int)MatchPhase.Lobby,session.Hosting);
         }
         void PauseTouches(){session?.Slingshot?.Cancel();joystick?.Release();lookPad?.Release();if(dancePicker!=null)dancePicker.gameObject.SetActive(false);}
-        void UpdateModal(){scrim.gameObject.SetActive(SettingsVisible||NameEditorVisible);settingsButton.transform.SetAsLastSibling();}
+        void UpdateModal(){scrim.gameObject.SetActive(SettingsVisible||NameEditorVisible||AvatarPickerVisible);settingsButton.gameObject.SetActive(!AvatarPickerVisible);settingsButton.transform.SetAsLastSibling();}
 
         void Update()
         {
@@ -340,10 +401,11 @@ namespace Staredown
             if(connected&&session.CanMove&&!wasCanMove)movementHintUntil=Time.unscaledTime+4;
             wasConnected=connected;wasCanMove=session.CanMove;
             if(connected&&!lobby&&NameEditorVisible)ShowNameEditor(false);
+            if(AvatarPickerVisible&&!session.CanSelectAvatar)ShowAvatarPicker(false);
             if(!layoutReady||connected!=lastConnected||lobby!=lastLobby||session.Hosting!=lastHosting||session.CanThrow!=lastCanThrow)ApplyLayout(layoutSize.x,layoutSize.y,portrait,connected,lobby,session.Hosting);
             home.gameObject.SetActive(!connected);brand.gameObject.SetActive(!connected);brandTag.gameObject.SetActive(!connected);roomBar.gameObject.SetActive(connected);
             homeShade.gameObject.SetActive(!connected);
-            bool modal=SettingsVisible||NameEditorVisible;
+            bool modal=SettingsVisible||NameEditorVisible||AvatarPickerVisible;
             roomMic.gameObject.SetActive(connected&&!modal);slingPanel.gameObject.SetActive(connected&&session.CanThrow&&!modal&&!dancePicker.gameObject.activeSelf);
             if(session.Slingshot!=null){slingTitle.text=session.Slingshot.Hint;slingBall.GetComponent<Image>().color=Color.Lerp(Cyan,new Color(1,.8f,.3f),session.Slingshot.Strength);}
             lookPad.gameObject.SetActive(connected&&!modal);lookHint.gameObject.SetActive(false);joystick.gameObject.SetActive(connected&&session.CanMove&&!modal);
@@ -353,6 +415,8 @@ namespace Staredown
             danceStop.interactable=isDancing;
             if(!connected||!session.CanDance||modal)dancePicker.gameObject.SetActive(false);
             bool validDraft=StarePlayerName.IsValid(playerName.text);
+            avatarEntry.GetComponentInChildren<Text>().text="Character · "+AvatarName(session.SelectedAvatar)+"  ›";
+            avatarEntry.interactable=settingsAvatar.interactable=session.CanSelectAvatar;
             homeHint.text=validDraft?"Shown above your avatar.":"Enter your name before playing.";
             practice.interactable=host.interactable=!session.Busy&&validDraft;join.interactable=!session.Busy&&validDraft&&StareRelayNetwork.ValidCode(code.text);
             bool idleStatus=session.Status=="Enable your camera, or explore a room first."||session.Status=="Choose practice, create a room, or join friends.";
@@ -478,7 +542,7 @@ namespace Staredown
             StretchLabel(settingsButton.GetComponentInChildren<Text>(),6,3);Fit(settingsButton.GetComponentInChildren<Text>(),18,connected?21:23);
             Place(roomMic.GetComponent<RectTransform>(),new Vector2(1,1),new Vector2(1,1),new Vector2(-140,-12),new Vector2(120,64));StretchLabel(roomMicLabel,6,3);Fit(roomMicLabel,15,19);
             Put(brand,new Vector2(16,-13),new Vector2(width-190,36),30);Put(brandTag,new Vector2(18,-51),new Vector2(width-190,24),16);
-            float homeWidth=tall?width-32:Mathf.Min(760,width-282);float homeTop=tall?88:82;float homeHeight=tall?784:Mathf.Min(484,height-homeTop-12);
+            float homeWidth=tall?width-32:Mathf.Min(760,width-282);float homeTop=tall?88:82;float homeHeight=tall?844:Mathf.Min(484,height-homeTop-12);
             Place(home,new Vector2(0,1),new Vector2(0,1),new Vector2(margin,-homeTop),new Vector2(homeWidth,homeHeight));
             float inner=homeWidth-40;
             if(tall)
@@ -486,24 +550,24 @@ namespace Staredown
                 Place(homeIntro,new Vector2(0,1),new Vector2(0,1),Vector2.zero,new Vector2(homeWidth,240));
                 hero.text="Don't blink.";Put(hero,new Vector2(20,-22),new Vector2(homeWidth-244,62),40);Fit(hero,28,40);
                 Put(description,new Vector2(20,-102),new Vector2(homeWidth-244,100),22);
-                Place(nameCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-256),new Vector2(homeWidth,144));
-                Place(playCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-416),new Vector2(homeWidth,236));
-                PlaceButton(practice,0,668,homeWidth,60,22);
-                Place(homeStatusPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-744),new Vector2(homeWidth,40));
+                Place(nameCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-256),new Vector2(homeWidth,204));
+                Place(playCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-476),new Vector2(homeWidth,236));
+                PlaceButton(practice,0,728,homeWidth,60,22);
+                Place(homeStatusPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-804),new Vector2(homeWidth,40));
             }
             else
             {
                 Place(homeIntro,new Vector2(0,1),new Vector2(0,1),Vector2.zero,new Vector2(homeWidth,104));
                 hero.text="Don't blink.";Put(hero,new Vector2(20,-12),new Vector2(inner,42),34);Fit(hero,28,34);Put(description,new Vector2(20,-62),new Vector2(inner,32),18);
                 float column=(homeWidth-16)*.5f;
-                Place(nameCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-120),new Vector2(column,144));
+                Place(nameCard,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-120),new Vector2(column,204));
                 Place(playCard,new Vector2(0,1),new Vector2(0,1),new Vector2(column+16,-120),new Vector2(column,236));
-                PlaceButton(practice,0,280,column,58,21);
-                Place(homeStatusPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-372),new Vector2(homeWidth,60));
+                PlaceButton(practice,0,340,column,58,21);
+                Place(homeStatusPanel,new Vector2(0,1),new Vector2(0,1),new Vector2(0,-414),new Vector2(homeWidth,60));
             }
             float nameWidth=nameCard.rect.width-40,playWidth=playCard.rect.width-40,joinWidth=tall?140:112;
             Put(namePrompt,new Vector2(20,-14),new Vector2(nameWidth,24),18);FieldPlace(playerName,new Vector2(20,-48),new Vector2(nameWidth,60));
-            Put(homeHint,new Vector2(20,-116),new Vector2(nameWidth,20),15);
+            Put(homeHint,new Vector2(20,-116),new Vector2(nameWidth,20),15);PlaceButton(avatarEntry,20,148,nameWidth,44,18);
             Put(playTitle,new Vector2(20,-14),new Vector2(playWidth,28),22);PlaceButton(host,20,54,playWidth,56,21);
             Put(joinHint,new Vector2(20,-122),new Vector2(playWidth,20),14);
             FieldPlace(code,new Vector2(20,-150),new Vector2(playWidth-joinWidth-12,64));PlaceButton(join,32+playWidth-joinWidth-12,150,joinWidth,64,20);
@@ -551,7 +615,7 @@ namespace Staredown
             Place(slingPanel,new Vector2(1,0),new Vector2(1,0),new Vector2(-20,48),new Vector2(188,172));
             Place(movementHint.rectTransform,Vector2.zero,Vector2.zero,new Vector2(20,10),new Vector2(width-40,30));Fit(movementHint,14,16);
             Place(lookHint.rectTransform,new Vector2(1,0),new Vector2(1,0),new Vector2(-174,59),new Vector2(tall?190:250,36));
-            LayoutSettings(width,height,tall);LayoutName(width,height,tall);
+            LayoutSettings(width,height,tall);LayoutName(width,height,tall);LayoutAvatarPicker(width,height,tall);
             float voiceWidth=Mathf.Min(500,width-32),voiceHeight=Mathf.Min(560,height-32);
             Place(voicePanel,new Vector2(.5f,.5f),new Vector2(.5f,.5f),Vector2.zero,new Vector2(voiceWidth,voiceHeight));
             voiceDetails.rectTransform.sizeDelta=new Vector2(voiceWidth-40,voiceHeight-190);
@@ -573,7 +637,7 @@ namespace Staredown
                 PlaceButton(calibrate,20,438,half,58,20);PlaceButton(cameraPower,32+half,438,half,58,20);Put(calibrationStatus,new Vector2(20,-508),new Vector2(inner,36),16);
                 PlaceButton(videoShare,20,552,inner,50,20);
                 Put(diagnosticsTitle,new Vector2(20,-616),new Vector2(inner,22),16);Put(diagnosticsText,new Vector2(20,-642),new Vector2(inner,56),12);
-                PlaceButton(settingsName,20,710,showBots?half:inner,50,20);PlaceButton(fill,32+half,710,half,50,18);PlaceButton(settingsLeave,20,776,inner,48,21);
+                float profileWidth=(inner-(showBots?24:12))/(showBots?3:2);PlaceButton(settingsName,20,710,profileWidth,50,18);PlaceButton(settingsAvatar,32+profileWidth,710,profileWidth,50,18);PlaceButton(fill,44+profileWidth*2,710,profileWidth,50,15);PlaceButton(settingsLeave,20,776,inner,48,21);
             }
             else
             {
@@ -581,10 +645,39 @@ namespace Staredown
                 Put(musicLabel,new Vector2(20,-80),new Vector2(column-132,34),23);PlaceButton(musicToggle,20+column-124,72,124,52,19);
                 Place(musicVolume.GetComponent<RectTransform>(),new Vector2(0,1),new Vector2(0,1),new Vector2(24,-139),new Vector2(column-66,50));Put(musicPercent,new Vector2(20+column-53,-150),new Vector2(53,30),17);
                 float half=(column-10)*.5f;PlaceButton(mic,20,206,half,56,18);PlaceButton(voiceToggle,30+half,206,half,56,18);Put(voiceStatus,new Vector2(20,-276),new Vector2(column,58),14);
-                PlaceButton(settingsName,20,354,showBots?half:column,50,17);PlaceButton(fill,30+half,354,half,50,17);PlaceButton(settingsLeave,20,418,column,48,20);
+                PlaceButton(settingsName,20,354,half,50,17);PlaceButton(settingsAvatar,30+half,354,half,50,17);PlaceButton(fill,20,418,half,48,15);PlaceButton(settingsLeave,showBots?30+half:20,418,showBots?half:column,48,19);
                 PlaceButton(portraitChoice,right,82,half,56,19);PlaceButton(landscapeChoice,right+half+10,82,half,56,19);
                 PlaceButton(calibrate,right,154,column,54,21);PlaceButton(cameraPower,right,218,column,54,21);PlaceButton(videoShare,right,282,column,52,20);Put(calibrationStatus,new Vector2(right,-346),new Vector2(column,36),16);
                 Put(diagnosticsTitle,new Vector2(right,-394),new Vector2(column,22),15);Put(diagnosticsText,new Vector2(right,-420),new Vector2(column,80),12);
+            }
+        }
+        void LayoutAvatarPicker(float width,float height,bool tall)
+        {
+            float w=Mathf.Min(tall?540:860,width-32),h=Mathf.Min(tall?760:520,height-32);
+            Place(avatarPanel,new Vector2(.5f,.5f),new Vector2(.5f,.5f),Vector2.zero,new Vector2(w,h));
+            Put(avatarTitle,new Vector2(20,-18),new Vector2(w-40,40),28);
+            if(tall)
+            {
+                float picture=h-340;
+                Place(avatarFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-72),new Vector2(w-32,picture));
+                float details=picture+84;
+                Put(avatarName,new Vector2(80,-details),new Vector2(w-160,40),32);Fit(avatarName,25,32);
+                Put(avatarTagline,new Vector2(74,-details-44),new Vector2(w-148,28),17);Fit(avatarTagline,14,17);
+                PlaceButton(avatarPrevious,16,details+4,54,64,35);PlaceButton(avatarNext,w-70,details+4,54,64,35);
+                Put(avatarIndex,new Vector2(80,-details-78),new Vector2(w-160,24),15);
+                Put(avatarHint,new Vector2(22,-h+140),new Vector2(w-44,40),15);
+                float half=(w-44)*.5f;PlaceButton(avatarCancel,16,h-82,half,60,20);PlaceButton(avatarUse,28+half,h-82,half,60,20);
+            }
+            else
+            {
+                float picture=Mathf.Min(h-92,w*.52f),right=picture+36,column=w-right-20;
+                Place(avatarFrame,new Vector2(0,1),new Vector2(0,1),new Vector2(16,-72),new Vector2(picture,h-88));
+                Put(avatarName,new Vector2(right,-105),new Vector2(column,44),32);Fit(avatarName,25,32);
+                Put(avatarTagline,new Vector2(right,-155),new Vector2(column,48),18);
+                PlaceButton(avatarPrevious,right,220,64,60,35);PlaceButton(avatarNext,w-84,220,64,60,35);
+                Put(avatarIndex,new Vector2(right+72,-237),new Vector2(column-144,28),15);
+                Put(avatarHint,new Vector2(right,-300),new Vector2(column,48),15);
+                PlaceButton(avatarUse,right,h-148,column,60,21);PlaceButton(avatarCancel,right,h-78,column,54,19);
             }
         }
         void LayoutName(float width,float height,bool tall)
@@ -607,7 +700,7 @@ namespace Staredown
         Text Label(string value,Transform parent,Vector2 position,Vector2 size,int points,Color color,bool heavy=false,TextAnchor alignment=TextAnchor.UpperLeft){var rect=LayoutRect(string.IsNullOrEmpty(value)?"Label":value,parent,new Vector2(0,1),new Vector2(0,1),Vector2.zero,Vector2.zero);rect.pivot=new Vector2(0,1);rect.anchoredPosition=position;rect.sizeDelta=size;var text=rect.gameObject.AddComponent<Text>();text.text=value;text.font=heavy?bold:regular;text.fontSize=points;text.color=color;text.alignment=alignment;text.raycastTarget=false;text.supportRichText=false;text.horizontalOverflow=HorizontalWrapMode.Wrap;text.verticalOverflow=VerticalWrapMode.Truncate;return text;}
         Button ButtonElement(string label,Transform parent,Vector2 position,Vector2 size,Action clicked,bool primary=false){var rect=Box(label,parent,new Vector2(0,1),position,size,new Vector2(0,1),primary?Cyan:Surface);var button=rect.gameObject.AddComponent<Button>();button.onClick.AddListener(()=>clicked());var colors=button.colors;colors.normalColor=Color.white;colors.highlightedColor=new Color(.8f,1,1);colors.pressedColor=new Color(.6f,.83f,.86f);colors.disabledColor=new Color(.5f,.5f,.5f,.6f);button.colors=colors;button.navigation=new Navigation{mode=Navigation.Mode.None};Label(label,rect,Vector2.zero,size,23,primary?Ink:Color.white,true,TextAnchor.MiddleCenter);return button;}
         Sprite RoundedSprite(){const int width=32;const float radius=8;var texture=new Texture2D(width,width,TextureFormat.RGBA32,false){name="Mobile rounded surface"};var pixels=new Color[width*width];for(int y=0;y<width;y++)for(int x=0;x<width;x++){var delta=new Vector2(Mathf.Max(radius-x-.5f,x+.5f-(width-radius)),Mathf.Max(radius-y-.5f,y+.5f-(width-radius)));float edge=new Vector2(Mathf.Max(0,delta.x),Mathf.Max(0,delta.y)).magnitude-radius;pixels[y*width+x]=new Color(1,1,1,Mathf.Clamp01(.5f-edge));}texture.SetPixels(pixels);texture.Apply();return Sprite.Create(texture,new Rect(0,0,width,width),Vector2.one*.5f,100,0,SpriteMeshType.FullRect,Vector4.one*radius);}
-        void OnDisable(){PauseTouches();}
+        void OnDisable(){PauseTouches();if(AvatarPickerVisible)ShowAvatarPicker(false);}
         void OnDestroy(){if(rounded!=null){Destroy(rounded.texture);Destroy(rounded);}}
     }
 

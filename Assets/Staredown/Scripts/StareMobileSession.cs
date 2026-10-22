@@ -15,6 +15,15 @@ namespace Staredown
   public string VoiceRoomId=>(transport as StareRelayNetwork)?.VoiceKey;
   public string PlayerName=>StarePlayerName.Saved;
   public bool HasPlayerName=>StarePlayerName.HasChosen;
+  public int SelectedAvatar {get{int id=PlayerPrefs.GetInt("Staredown.MobileAvatar",2);return StareAvatarCatalog.IsPreset(id)?id:2;}}
+  public bool CanSelectAvatar=>!Busy&&(!Connected||State.phase==(int)MatchPhase.Lobby);
+  public void SelectAvatar(int id)
+  {
+   if(!CanSelectAvatar||!StareAvatarCatalog.IsPreset(id))return;
+   PlayerPrefs.SetInt("Staredown.MobileAvatar",id);PlayerPrefs.Save();
+   if(!Connected)return;
+   if(model!=null)model.SelectAvatar(LocalId,id);else transport?.Send(0,new WireMessage{kind="avatar",avatar=id});
+  }
   public bool MusicEnabled=>PlayerPrefs.GetInt("Staredown.MobileMusicEnabled",1)!=0;
   public float MusicVolume=>Mathf.Clamp01(PlayerPrefs.GetFloat("Staredown.MobileMusicVolume",.2f));
   public bool VideoSharingEnabled=>PlayerPrefs.GetInt("Staredown.MobileShareVideo",1)!=0;
@@ -110,7 +119,7 @@ namespace Staredown
   public void Practice()
   {
    if(!RequirePlayerName())return;
-   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);State=model.Snapshot();Status="Practice: look at the camera and keep both eyes open to calibrate.";
+   Leave();practice=true;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,SelectedAvatar);State=model.Snapshot();Status="Practice: look at the camera and keep both eyes open to calibrate.";
   }
   public void SetPlayerName(string value)
   {
@@ -139,12 +148,12 @@ namespace Staredown
      string room=await relay.HostAsync();if(request!=generation||this==null)return;
      while(!relay.Bound&&string.IsNullOrEmpty(relay.Error)){relay.Tick();await System.Threading.Tasks.Task.Delay(20);if(request!=generation||this==null)return;}
      if(!string.IsNullOrEmpty(relay.Error))throw new InvalidOperationException(relay.Error);
-     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,2);State=model.Snapshot();Busy=false;Status="Share the room code. Explore while friends join.";
+     RoomCode=room;LocalId=0;model=new Tournament();model.Add(0,PlayerName);model.EnableBotFill();model.SelectAvatar(0,SelectedAvatar);State=model.Snapshot();Busy=false;Status="Share the room code. Explore while friends join.";
     }
     else {await relay.JoinAsync(code);if(request!=generation||this==null)return;RoomCode=StareRelayNetwork.NormalizeCode(code);Status="Connected to Relay. Waiting for the host…";}
    }
    catch(Exception e)
-   {if(request!=generation||this==null)return;relay.Dispose();transport=null;Busy=false;LocalId=-1;RoomCode="";Status=e is InvalidOperationException||e is ArgumentException?e.Message:"Room connection failed. Check the code and internet, then try again.";Debug.LogWarning("[STARE MOBILE] "+Status);}
+   {if(request!=generation||this==null)return;relay.Dispose();transport=null;Busy=false;LocalId=-1;RoomCode="";Status=StareRelayNetwork.ConnectionError(e);Debug.LogWarning("[STARE MOBILE] "+Status);}
   }
   public void Leave()
   {
@@ -195,7 +204,7 @@ namespace Staredown
     if(CameraHeads.Handle(message,packet.sender,model,transport,LocalId))continue;
     if(model!=null)
     {
-     if(message.kind=="connected"){if(model.Add(packet.sender,"PLAYER "+(packet.sender+1))==null){transport.ClosePeer(packet.sender);continue;}transport.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender,capturedBlinks=true});}
+     if(message.kind=="connected"){if(model.JoinHuman(packet.sender,"PLAYER "+(packet.sender+1))==null){if(transport is StareRelayNetwork relay)relay.RejectPeer(packet.sender,"ROOM FULL / WAIT FOR A PLAYER TO LEAVE");else transport.ClosePeer(packet.sender);continue;}transport.Send(packet.sender,new WireMessage{kind="welcome",id=packet.sender,capturedBlinks=true,state=model.Snapshot()});}
      else if(message.kind=="blinkEvent")transport.Send(packet.sender,new WireMessage{kind="blinkAck",blinkEvent=message.blinkEvent,error=model.AcceptCapturedBlink(packet.sender,message.blinkEvent)});
      else if(message.kind=="disconnected")model.Remove(packet.sender);
      else if(message.kind=="name")model.SetName(packet.sender,message.name);
@@ -208,7 +217,7 @@ namespace Staredown
     }
     else
     {
-     if(message.kind=="welcome"){hostCapturedBlinks=message.capturedBlinks;LocalId=message.id;Busy=false;transport.Send(0,new WireMessage{kind="avatar",avatar=2});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(VideoSending);Status="Room "+RoomCode+". Explore and wait for the host.";}
+     if(message.kind=="welcome"){hostCapturedBlinks=message.capturedBlinks;LocalId=message.id;Busy=false;if(message.state!=null)State=message.state;transport.Send(0,new WireMessage{kind="avatar",avatar=SelectedAvatar});transport.Send(0,new WireMessage{kind="name",name=PlayerName});SendProfile(VideoSending);Status=State.phase!=(int)MatchPhase.Lobby?"Joined as spectator. You can play next match.":"Room "+RoomCode+". Explore and wait for the host.";}
      if(message.kind=="blinkAck"&&packet.sender==0)blinkOutbox.Acknowledge(message.blinkEvent,message.error);
      if(message.kind=="state"&&message.state!=null)State=message.state;
      if(message.kind=="disconnected"){string error=transport.Error;Leave();Status="Connection ended: "+error;break;}
@@ -238,7 +247,7 @@ namespace Staredown
     model.Presence(LocalId,presence);if(CanMove&&placed==LocalId)model.RoomPose(LocalId,floor,yaw);
     if(practice&&!practiceStarted&&model.Phase==MatchPhase.Lobby&&MobileCamera.Ready&&MobileCamera.Valid&&model.Start())practiceStarted=true;model.Tick(dt);State=model.Snapshot();
    }
-   if(transport is StareRelayNetwork relay)relay.SetRoomOpen(State.phase==0&&State.fighters.Count(f=>!f.bot)<Tournament.Capacity);
+   if(transport is StareRelayNetwork relay)relay.SetRoomOpen(model!=null&&model.CanAdmitHuman);
    if(Time.unscaledTime>=sendAt){sendAt=Time.unscaledTime+.05f;if(model!=null)transport?.Broadcast(new WireMessage{kind="state",state=State});else if(Connected)transport?.Send(0,new WireMessage{kind="input",capturedBlinks=hostCapturedBlinks,left=MobileCamera.Left,right=MobileCamera.Right,valid=MobileCamera.Valid,ready=MobileCamera.Ready,blink=MobileCamera.BlinkSequence,yaw=MobileCamera.Yaw,pitch=MobileCamera.Pitch,demo=false,presence=presence,hasRoomPose=CanMove&&placed==LocalId,roomPosition=floor,roomYaw=yaw});}
    SyncContestTracking();PlaceForPhase();Visuals.SetArenaTheme(State.arenaTheme);Visuals.UpdateState(State,LocalId,false);HideVrMenus();CameraHeads.Sync(Visuals,State,LocalId);if(GetComponent<StareFeedback>()==null)Feedback();
   }

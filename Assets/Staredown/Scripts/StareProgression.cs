@@ -34,7 +34,7 @@ namespace Staredown
   }
   public void Observe(ArenaState state,int localId,string room)
   {
-   if(string.IsNullOrEmpty(state.matchToken)||state.phase==(int)MatchPhase.Lobby)return;var fighter=Array.Find(state.fighters,f=>f.id==localId);if(fighter==null||fighter.bot)return;bool dead=!fighter.alive,champion=state.phase==(int)MatchPhase.Champion&&state.winner==localId;if(sampledToken==state.matchToken&&sampledId==localId&&sampledWins==fighter.roundWins&&sampledDead==dead&&sampledChampion==champion)return;sampledToken=state.matchToken;sampledId=localId;sampledWins=fighter.roundWins;sampledDead=dead;sampledChampion=champion;string key=(room??session)+":"+state.matchToken+":"+localId;
+   if(string.IsNullOrEmpty(state.matchToken)||state.phase==(int)MatchPhase.Lobby)return;var fighter=Array.Find(state.fighters,f=>f.id==localId);if(fighter==null||fighter.bot||fighter.status=="SPECTATOR / NEXT MATCH")return;bool dead=!fighter.alive,champion=state.phase==(int)MatchPhase.Champion&&state.winner==localId;if(sampledToken==state.matchToken&&sampledId==localId&&sampledWins==fighter.roundWins&&sampledDead==dead&&sampledChampion==champion)return;sampledToken=state.matchToken;sampledId=localId;sampledWins=fighter.roundWins;sampledDead=dead;sampledChampion=champion;string key=(room??session)+":"+state.matchToken+":"+localId;
    for(int win=1;win<=fighter.roundWins;win++)Claim(key+":round:"+win,10+win*5,25);
    if(!fighter.alive&&!fighter.disconnected)Claim(key+":finish",5,10);
    if(state.phase==(int)MatchPhase.Champion&&state.winner==localId)Claim(key+":champion",50,60);

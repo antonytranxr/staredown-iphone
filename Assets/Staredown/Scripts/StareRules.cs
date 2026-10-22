@@ -130,9 +130,9 @@ namespace Staredown
         readonly int smallRoomLives;
         readonly Dictionary<long,int> meetings=new Dictionary<long,int>();
         readonly Dictionary<int,int> lastOpponent=new Dictionary<int,int>(),byes=new Dictionary<int,int>();int lastBye=-1;
-        // A one-life instance is useful for focused knockout-rule regression
-        // fixtures; actual game sessions use three lives in rooms of 2–8.
-        public Tournament(int smallRoomLives=3){this.smallRoomLives=Mathf.Clamp(smallRoomLives,1,5);}
+        // Every game session is single elimination. Retain the explicit override
+        // for legacy snapshot/rule fixtures; no player-facing mode enables it.
+        public Tournament(int smallRoomLives=1){this.smallRoomLives=Mathf.Clamp(smallRoomLives,1,5);}
         public bool EnableBotFill()
         {
             if (Phase != MatchPhase.Lobby || !Fighters.Any(f => !f.bot)) return false;
@@ -175,10 +175,28 @@ namespace Staredown
             Fighters.Add(f); if (!bot) FillVacantSeats(); return f;
         }
         public Fighter Find(int id) => Fighters.Find(f => f.id == id);
+        public bool CanAdmitHuman => Phase==MatchPhase.Lobby
+            ? Fighters.Count(f=>!f.bot&&!f.disconnected)<Capacity
+            : Fighters.Count<Capacity||Fighters.Any(f=>f.disconnected);
+        public Fighter JoinHuman(int id,string name)
+        {
+            if(Phase==MatchPhase.Lobby)return Add(id,name);
+            if(Find(id)!=null)return null;
+            // A reconnect gets a new transport identity. Reclaim a departed
+            // spectator's seat, never an active opponent or a fresh life.
+            if(Fighters.Count>=Capacity)
+            {
+                var departed=Fighters.FirstOrDefault(f=>f.disconnected);
+                if(departed==null)return null;
+                Fighters.Remove(departed);
+            }
+            var guest=new Fighter{id=id,name=name,alive=false,lives=0,status="SPECTATOR / NEXT MATCH",lastInput=Clock};
+            Fighters.Add(guest);return guest;
+        }
         public bool SetName(int id,string name)
         {
             var f=Find(id);var clean=StarePlayerName.Clean(name);
-            if(f==null||f.bot||f.disconnected||Phase!=MatchPhase.Lobby||string.IsNullOrEmpty(clean))return false;
+            if(f==null||f.bot||f.disconnected||(Phase!=MatchPhase.Lobby&&f.alive)||string.IsNullOrEmpty(clean))return false;
             f.name=clean;return true;
         }
         public bool Presence(int id,StarePresenceFrame frame)
@@ -186,7 +204,7 @@ namespace Staredown
         public bool SelectAvatar(int id, int avatar, string userId = null)
         {
             var f = Find(id);
-            if (f == null || Phase != MatchPhase.Lobby || !StareAvatarCatalog.IsValid(avatar, userId)) return false;
+            if (f == null || f.disconnected || (Phase != MatchPhase.Lobby && f.alive) || !StareAvatarCatalog.IsValid(avatar, userId)) return false;
             f.avatar = avatar; f.avatarUserId = avatar == StareAvatarCatalog.Meta ? userId : null;
             return true;
         }

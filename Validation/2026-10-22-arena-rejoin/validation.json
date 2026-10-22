@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-22",
+  "changes": [
+    "Mirror width 4.8 m, frame 5.1 m; same capture pixel budget",
+    "Default single-life knockout at every room size; volumetric life hearts",
+    "Actual jumbotron roster with IN/OUT status, final eye close-ups and champion persistence",
+    "Mobile actual-model avatar chooser: all eight presets, portrait and landscape",
+    "Expired-auth refresh, stale-directory recovery, bounded join timeout, explicit rejection and spectator rejoin",
+    "Next-match spectators cannot claim participation rewards"
+  ],
+  "checks": {
+    "single_life_and_rejoin_rules": 109,
+    "mixed_roster": 34,
+    "social_lobby": 27,
+    "scoreboard_presentation": 14,
+    "arena_roster_heart_mirror": 108,
+    "mobile_avatar_pixels_layout_lifecycle": 131,
+    "existing_mobile_ui": 157,
+    "mobile_controls": 35,
+    "captured_blink_rules": 36,
+    "quest_navigation_and_capture": 7,
+    "local_rejoin_botfilled16": 51,
+    "live_relay_rejoin_botfilled16": 52,
+    "missing_welcome_timeout_seconds": 15,
+    "competition_progression_and_spectator_rewards": 228
+  },
+  "limitations": [
+    "Original friend device failure was not reproduced; lifecycle fixes validated with real Relay host/client test loops",
+    "No 16-simultaneous-human stress test",
+    "No physical phone camera or sustained worn-headset performance measurement this turn",
+    "iPhone Xcode export completed; native archive, TestFlight upload and phone installation not performed"
+  ],
+  "visual_review": [
+    "All 16 roster cards readable; IN/OUT status and names fit actual screen",
+    "Full avatar previews visible and framed in portrait and landscape",
+    "Wide mirror reflects a full character and arena"
+  ],
+  "quest_build": {
+    "result": "Succeeded",
+    "errors": 0,
+    "warnings": 16,
+    "bytes": 1913790217,
+    "duration": "00:01:36.6068700",
+    "path": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/outputs/Staredown-Quest-2026-10-22-v1.20.0-02.apk"
+  },
+  "quest_apk": {
+    "package": "package: name='com.antony.staredown' versionCode='42' versionName='1.20.0' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'",
+    "bytes": 262521878,
+    "sha256": "dd359b511791011edb6de7bc24948dc4e781f75c67a5e915d5e9c568df5c70d0",
+    "quest_headtracking": true,
+    "openxr_native": true,
+    "meta_xr_native": true,
+    "phone_camera_bridge": false
+  },
+  "quest_device": {
+    "model": "Quest Pro",
+    "serial": "230YC01D7V00N3",
+    "version": "1.20.0",
+    "build": 42,
+    "installed": true,
+    "startup": "App alive; OpenXR reached focused state; no managed exception or fatal crash in startup capture"
+  },
+  "iphone_export": {
+    "version": "1.2.0",
+    "build": 13,
+    "result": "Succeeded",
+    "errors": 0,
+    "warnings": 2,
+    "path": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/work/Staredown-iOS-2026-10-22-1.2.0-build13-02",
+    "plist_version_and_camera_mic_declarations_verified": true
+  }
+}
