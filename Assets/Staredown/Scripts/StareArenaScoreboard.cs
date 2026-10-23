@@ -24,14 +24,15 @@ namespace Staredown
             if(!fighter.alive)return fighter.status=="DISCONNECTED"?"DISCONNECTED":fighter.status=="SPECTATOR / NEXT MATCH"?"NEXT MATCH":"ELIMINATED";
             if(state.phase==(int)MatchPhase.Lobby)return fighter.ready&&fighter.valid?"READY":"GETTING READY";
             if(fighter.pair<0)return "NEXT ROUND";
-            if(fighter.pair<state.pairs.Length&&state.pairs[fighter.pair].winner>=0)return "ROUND WON";
+            if(fighter.pair<state.pairs.Length&&state.pairs[fighter.pair].winner>=0)return state.pairs[fighter.pair].loser==fighter.id?"HEART USED":"ROUND WON";
             return state.phase==(int)MatchPhase.Countdown?"STARTING SOON":state.phase==(int)MatchPhase.Intermission?"NEXT ROUND":"STARING";
         }
 
         public static string Summary(ArenaState state)
         {
-            if(state.phase==(int)MatchPhase.Lobby)return "EXPLORE & CHAT / HOST STARTS THE MATCH";
-            return state.trackingPaused?"HEADSET TRACKING LOST / PAUSED":"ONE LIFE  /  ONE BLINK AND YOU’RE OUT";
+            if(state.trackingPaused)return "HEADSET TRACKING LOST / PAUSED";
+            if(!state.livesMode||state.startingLives<=1)return "NEXT LOSS = OUT";
+            return state.phase==(int)MatchPhase.Lobby?"ONE SPARE HEART / LOSE TWICE AND YOU’RE OUT":"ONE SPARE HEART  /  SECOND LOSS = OUT";
         }
     }
 
@@ -123,7 +124,7 @@ namespace Staredown
                 scoreSurfaces[i].sharedMaterial.SetColor("_Accent",local?Gold:accent);scoreSurfaces[i].sharedMaterial.SetFloat("_Selected",local?.55f:.08f);
                 scoreBadges[i].sharedMaterial.SetColor("_Accent",accent);scoreBadges[i].sharedMaterial.SetColor("_Color",active?new Color(.015f,.10f,.09f):new Color(.045f,.053f,.065f));
                 scoreHearts[i].localRotation=Quaternion.Euler(0,active?Mathf.Sin(state.clock*.8f+i)*22:0,active?0:-16);
-                scoreHeartRenderers[i].sharedMaterial=LifeTokenMaterial(active);
+                scoreHeartRenderers[i].sharedMaterial=LifeTokenMaterial(active&&fighter.lives>1);
             }
         }
     }

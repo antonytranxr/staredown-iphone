@@ -72,7 +72,7 @@ public static class StareBuild
    if(t.Phase==MatchPhase.Duel)t.Blink(0);
    t.Tick(.02f);
   }
-  check(t.Phase==MatchPhase.Champion&&t.Round==4&&t.Fighters.Count(f=>f.alive)==1&&t.Winner>=0,"Mixed bracket and disconnect resolve to one champion");
+  check(t.Phase==MatchPhase.Champion&&t.Round>=4&&t.Round<=31&&t.Fighters.Count(f=>f.alive)==1&&t.Winner>=0,"Mixed bracket and disconnect resolve to one champion");
   t.Tick(8.1f);check(t.Phase==MatchPhase.Lobby&&t.Fighters.Count==Tournament.Capacity&&t.Fighters.Count(f=>f.bot)==Tournament.Capacity-1&&t.Find(1)==null,"Post-match lobby replaces disconnected human with a bot");
   check(t.ArenaTheme==2&&t.Fighters.All(f=>f.alive&&f.pair==-1),"Arena and reset bracket survive rematch");
   var full=new Tournament();full.Add(0,"HOST");full.EnableBotFill();

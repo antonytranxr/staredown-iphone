@@ -99,7 +99,7 @@ namespace Staredown
                 if(state.livesMode&&(state.phase==(int)MatchPhase.Duel||state.phase==(int)MatchPhase.Intermission)&&previous.TryGetValue(fighter.id,out var priorLife)&&fighter.alive&&priorLife.alive&&fighter.lives<priorLife.lives)
                 {
                     var at=ArenaLayout.Seat(state,fighter.id);PulseRing(at,Red,1.5f,.7f);Burst(at+Vector3.up*1.5f,Gold,18,.65f);
-                    if(fighter.id==localId)Show("LIFE LOST\n"+fighter.lives+" LEFT",Gold,1.6f);
+                    if(fighter.id==localId)Show("HEART USED\nYOU GET ONE MORE CHANCE",Gold,2.2f);
                 }
                 previous[fighter.id]=new Previous{alive=fighter.alive,wins=fighter.roundWins,lives=fighter.lives,seat=ArenaLayout.Seat(state,fighter.id)};
                 if(fighter.id==localId&&fighter.alive&&fighter.pair>=0&&fighter.pair<state.pairs.Length&&state.pairs[fighter.pair].winner<0)active=true;

@@ -9,7 +9,7 @@ namespace Staredown
     [Serializable] public class Fighter
     {
         public int id; public string name; public bool bot, alive = true, ready, valid, demo, dancing;
-        public int pair = -1, roundWins, lives = 1; public float left, right, yaw, pitch;
+        public int pair = -1, roundWins, lives = 1, arenaSlot = 0; public float left, right, yaw, pitch;
         public int avatar,skin,dance; public string avatarUserId; public bool phoneCamera;
         public Vector3 roomPosition; public float roomYaw; public bool hasRoomPose;
         public StarePresenceFrame presence; public float presenceAt=-10;
@@ -130,9 +130,8 @@ namespace Staredown
         readonly int smallRoomLives;
         readonly Dictionary<long,int> meetings=new Dictionary<long,int>();
         readonly Dictionary<int,int> lastOpponent=new Dictionary<int,int>(),byes=new Dictionary<int,int>();int lastBye=-1;
-        // Every game session is single elimination. Retain the explicit override
-        // for legacy snapshot/rule fixtures; no player-facing mode enables it.
-        public Tournament(int smallRoomLives=1){this.smallRoomLives=Mathf.Clamp(smallRoomLives,1,5);}
+        // Two losses to elimination: one spare heart, then a final chance.
+        public Tournament(int smallRoomLives=2){this.smallRoomLives=Mathf.Clamp(smallRoomLives,1,5);StartingLives=this.smallRoomLives;LivesMode=StartingLives>1;}
         public bool EnableBotFill()
         {
             if (Phase != MatchPhase.Lobby || !Fighters.Any(f => !f.bot)) return false;
@@ -171,8 +170,34 @@ namespace Staredown
             var replacement = existing ?? (!bot && BotFillEnabled && Fighters.Count >= Capacity ? Fighters.LastOrDefault(f => f.bot) : null);
             if (replacement != null) Fighters.Remove(replacement);
             else if (Fighters.Count >= Capacity) return null;
-            var f = new Fighter { id = id, name = name, bot = bot, avatar = bot ? StareAvatarCatalog.PresetId(id) : 0, ready = bot, valid = bot, lastInput = Clock, status = bot ? "READY / BOT" : "CALIBRATE" };
-            Fighters.Add(f); if (!bot) FillVacantSeats(); return f;
+            var f = new Fighter { id = id, name = name, bot = bot, avatar = bot ? StareAvatarCatalog.PresetId(id) : 0, ready = bot, valid = bot, lives=smallRoomLives, arenaSlot=FreeArenaSlot(), lastInput = Clock, status = bot ? "READY / BOT" : "CALIBRATE" };
+            Fighters.Add(f);AssignSocialSpawn(f,true);if (!bot) FillVacantSeats(); return f;
+        }
+        int FreeArenaSlot()
+        {for(int slot=1;slot<=Capacity;slot++)if(!Fighters.Any(f=>f.arenaSlot==slot))return slot;return 1;}
+        void AssignSocialSpawn(Fighter fighter,bool lobby)
+        {
+            // Freeze each entry position in the host snapshot. List indices
+            // change when bots are replaced; they must never move existing players.
+            var state=Snapshot();Vector3 best=Vector3.zero;float bestClearance=-1;
+            foreach(float radius in lobby?new[]{8f,10.5f,5.5f,3f}:new[]{11.8f,10.8f,9.8f})
+            for(int step=0;step<64;step++)
+            {
+                float angle=((fighter.arenaSlot-1)*360f/Capacity+step*360f/64)*Mathf.Deg2Rad;
+                var candidate=new Vector3(Mathf.Sin(angle)*radius,0,Mathf.Cos(angle)*radius);
+                if(!lobby&&!StareArenaFields.Contains(state,candidate))continue;
+                float clearance=float.MaxValue;
+                foreach(var other in Fighters)
+                {
+                    if(other.id==fighter.id||other.disconnected)continue;
+                    var delta=candidate-ArenaLayout.Seat(state,other.id);delta.y=0;
+                    clearance=Mathf.Min(clearance,delta.sqrMagnitude);
+                }
+                if(clearance>bestClearance){bestClearance=clearance;best=candidate;}
+                if(clearance>=4f)goto chosen;
+            }
+            chosen:
+            fighter.roomPosition=best;fighter.roomYaw=Quaternion.LookRotation(-best.normalized).eulerAngles.y;fighter.hasRoomPose=true;
         }
         public Fighter Find(int id) => Fighters.Find(f => f.id == id);
         public bool CanAdmitHuman => Phase==MatchPhase.Lobby
@@ -190,8 +215,8 @@ namespace Staredown
                 if(departed==null)return null;
                 Fighters.Remove(departed);
             }
-            var guest=new Fighter{id=id,name=name,alive=false,lives=0,status="SPECTATOR / NEXT MATCH",lastInput=Clock};
-            Fighters.Add(guest);return guest;
+            var guest=new Fighter{id=id,name=name,alive=false,lives=0,arenaSlot=FreeArenaSlot(),status="SPECTATOR / NEXT MATCH",lastInput=Clock};
+            Fighters.Add(guest);AssignSocialSpawn(guest,false);return guest;
         }
         public bool SetName(int id,string name)
         {
@@ -227,7 +252,7 @@ namespace Staredown
         {
             if (Phase != MatchPhase.Lobby && Phase != MatchPhase.Champion) return false;
             if (Fighters.Count < 2 || Fighters.Any(f => !f.ready || !f.valid)) { Announcement = "EVERY PLAYER MUST CALIBRATE FIRST"; return false; }
-            LivesMode=Fighters.Count<=8&&smallRoomLives>1;StartingLives=LivesMode?smallRoomLives:1;
+            LivesMode=smallRoomLives>1;StartingLives=smallRoomLives;
             foreach (var f in Fighters) { f.alive = true; f.lives=StartingLives; f.roundWins = 0; f.hasRoomPose=false; f.dancing=false; f.phoneTrackingRequired|=f.phoneCamera; f.status = "READY"; if(f.bot)f.left=f.right=0; }
             meetings.Clear();lastOpponent.Clear();byes.Clear();lastBye=-1;
             ChampionName=null;ChampionAvatarUserId=null;ChampionAvatar=ChampionSkin=0;ChampionBot=false;
@@ -247,9 +272,10 @@ namespace Staredown
         {
             if(Phase!=MatchPhase.Champion)return;
             Fighters.RemoveAll(f=>f.disconnected);
-            foreach(var f in Fighters){f.alive=true;f.lives=1;f.pair=-1;f.roundWins=0;f.hasRoomPose=false;f.phoneTrackingRequired=false;f.faceMissingFor=0;f.status=f.ready&&f.valid?"READY":"CALIBRATE";}
+            foreach(var f in Fighters){f.alive=true;f.lives=smallRoomLives;f.pair=-1;f.roundWins=0;f.hasRoomPose=false;f.phoneTrackingRequired=false;f.faceMissingFor=0;f.status=f.ready&&f.valid?"READY":"CALIBRATE";}
             Pairs.Clear();Tosses.Clear();TrackingPaused=false;FinalRound=false;Remaining=0;Round=0;Phase=MatchPhase.Lobby;
             Announcement="BACK IN THE ARENA / READY FOR ANOTHER MATCH";
+            foreach(var f in Fighters)AssignSocialSpawn(f,true);
             FillVacantSeats();
         }
         void NextRound()
@@ -284,11 +310,29 @@ namespace Staredown
                 Pairs.Add(new Pairing { a = a.id, b = b.id, botA = 5 + (float)random.NextDouble() * 17, botB = 5 + (float)random.NextDouble() * 17 });
                 if(LivesMode){long key=PairKey(a.id,b.id);int count;meetings.TryGetValue(key,out count);meetings[key]=count+1;lastOpponent[a.id]=b.id;lastOpponent[b.id]=a.id;}
             }
-            Phase = MatchPhase.Countdown; Remaining = 5; Announcement = survivors.Count == 2 ? "THE FINAL STARE" : "ROUND " + Round + (LivesMode?" / NEW OPPONENTS / KEEP YOUR LIVES":" / EYES UP");
+            Phase = MatchPhase.Countdown; Remaining = 5; Announcement = survivors.Count == 2 ? "THE FINAL STARE" : "ROUND " + Round + (LivesMode?" / ONE SPARE HEART":" / EYES UP");
         }
         static long PairKey(int a,int b){uint low=(uint)Mathf.Min(a,b),high=(uint)Mathf.Max(a,b);return ((long)low<<32)|high;}
         List<Fighter> LifeRoundOrder(List<Fighter> survivors)
         {
+            // Bound work for full rooms; exhaustive pairing is only useful for
+            // small groups. Rotating seeds and repeat costs vary large-room rivals.
+            if(survivors.Count>8)
+            {
+                var available=new List<Fighter>(survivors);var ordered=new List<Fighter>();Fighter bye=null;
+                if(available.Count%2!=0)
+                {
+                    bye=available.OrderBy(f=>(byes.TryGetValue(f.id,out var n)?n:0)*10000+(lastBye==f.id?5000:0)).First();available.Remove(bye);
+                    byes[bye.id]=(byes.TryGetValue(bye.id,out var byeCount)?byeCount:0)+1;lastBye=bye.id;
+                }
+                while(available.Count>0)
+                {
+                    var a=available[0];available.RemoveAt(0);
+                    var b=available.OrderBy(f=>(meetings.TryGetValue(PairKey(a.id,f.id),out var n)?n:0)*10+(lastOpponent.TryGetValue(a.id,out var prior)&&prior==f.id?1000:0)).First();
+                    available.Remove(b);ordered.Add(a);ordered.Add(b);
+                }
+                if(bye!=null)ordered.Add(bye);return ordered;
+            }
             // At most eight players: evaluate all pairings rather than a greedy
             // shuffle that can repeatedly give a four-player room the same foe.
             List<Fighter> best=null;int bestCost=int.MaxValue;
@@ -322,9 +366,9 @@ namespace Staredown
             if(p.winner>=0||loser==null)return;
             var winner=Find(p.a==loser.id?p.b:p.a);if(winner==null)return;
             loser.lives=disconnected?0:Mathf.Max(0,loser.lives-1);loser.alive=loser.lives>0&&!loser.disconnected;loser.hasRoomPose=false;
-            loser.status=disconnected?"DISCONNECTED":!loser.alive?reason+" / SPECTATOR":reason+" / LIFE LOST / "+loser.lives+" LEFT";
+            loser.status=disconnected?"DISCONNECTED":!loser.alive?reason+" / SPECTATOR":reason+" / HEART USED / LAST CHANCE";
             loser.openingEyesPending=false;p.loser=loser.id;p.winner=winner.id;p.pending=-1;winner.roundWins++;
-            if(winner.alive)winner.status=LivesMode?"ROUND WON / "+winner.lives+" LIVES":"ADVANCED";
+            if(winner.alive)winner.status=LivesMode?"ROUND WON / "+(winner.lives>1?"HEART READY":"LAST CHANCE"):"ADVANCED";
         }
         public void Input(int id, float l, float r, bool valid, bool ready, int blink, float yaw, float pitch, bool demo = false, bool capturedBlinks = false)
         {
@@ -385,7 +429,7 @@ namespace Staredown
                         // deterministically instead of restarting the round.
                         var loser=lostA&&(!lostB||a.faceMissingFor>=b.faceMissingFor)?a:b;
                         ResolvePair(p,loser,"FACE LOST");
-                        Announcement=loser.DisplayName+(loser.alive?" / LIFE LOST / "+loser.lives+" LEFT":" / FACE LEFT CAMERA / ELIMINATED");
+                        Announcement=loser.DisplayName+(loser.alive?" / HEART USED / LAST CHANCE":" / FACE LEFT CAMERA / ELIMINATED");
                     }
                 }
             }
@@ -433,10 +477,10 @@ namespace Staredown
                     if (p.pending >= 0 && Clock - p.pendingAt > .08f)
                     {
                         var loser = Find(p.pending);ResolvePair(p,loser,"BLINKED");
-                        Announcement = loser.DisplayName + (loser.alive?" / LIFE LOST / "+loser.lives+" LEFT":" BLINKED / ELIMINATED");
+                        Announcement = loser.DisplayName + (loser.alive?" / HEART USED / LAST CHANCE":" BLINKED / ELIMINATED");
                     }
                 }
-                if (Pairs.All(p => p.winner >= 0)) { Phase = MatchPhase.Intermission; Remaining = 4; Announcement = LivesMode?"ROUND COMPLETE / CHECK YOUR LIVES":"ROUND COMPLETE"; }
+                if (Pairs.All(p => p.winner >= 0)) { Phase = MatchPhase.Intermission; Remaining = 4; Announcement = LivesMode?"ROUND COMPLETE / NEXT OPPONENT":"ROUND COMPLETE"; }
                 else if (Remaining <= 0)
                 { Phase = MatchPhase.Countdown; Remaining = 5; foreach (var p in Pairs) p.pending = -1; Announcement = "STILL STARING / TAKE A BREATH / REMATCH"; }
             }
@@ -519,7 +563,7 @@ namespace Staredown
         public static Vector3 Seat(ArenaState s, int id)
         {
             var f = Array.Find(s.fighters, x => x.id == id); if (f == null) return new Vector3(0, 0, -15);
-            int index = Array.FindIndex(s.fighters, x => x.id == id);
+            int index = f.arenaSlot>0?f.arenaSlot-1:Array.FindIndex(s.fighters, x => x.id == id);
             if(s.phase==(int)MatchPhase.Lobby)
             {
                 if(f.hasRoomPose)return f.roomPosition;

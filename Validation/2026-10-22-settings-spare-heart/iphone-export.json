@@ -1,0 +1,9 @@
+{
+  "version": "1.2.1",
+  "build": "14",
+  "camera_microphone_permissions": true,
+  "native_version_bridge_in_xcode_and_il2cpp": true,
+  "export": "Succeeded errors=0 warnings=3 duration=00:01:12.2737940",
+  "native_archive": false,
+  "testflight_uploaded": false
+}

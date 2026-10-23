@@ -226,6 +226,7 @@ namespace Staredown
   {
    settingsPanel=Group("Settings",menu,new Vector3(0,0,-.15f));
    UILabel("Make it yours.",settingsPanel,new Vector3(0,.99f,-.04f),.070f,UIInk,true,TextAnchor.MiddleCenter);
+   UILabel(StareAppVersion.Label,settingsPanel,new Vector3(0,.81f,-.04f),.023f,UIMuted,false,TextAnchor.MiddleCenter).name="Installed app version";
    arenaChoiceLabel=UILabel("ARENA / CHOOSE YOUR SETTING",settingsPanel,new Vector3(0,.67f,-.04f),.025f,UIMuted,true,TextAnchor.MiddleCenter);
    brightArenaButton=UIButton("Bright","arena:0",settingsPanel,new Vector3(-1.10f,.41f,-.065f),new Vector2(1.02f,.32f),false,new Color(1,.76f,.25f));
    moonlitArenaButton=UIButton("Moonlit","arena:1",settingsPanel,new Vector3(0,.41f,-.065f),new Vector2(1.02f,.32f),false,new Color(.65f,.58f,1));

@@ -12,7 +12,7 @@ namespace Staredown
     {
         static readonly Color Ink=new Color(.025f,.045f,.07f,.96f),Surface=new Color(.065f,.105f,.145f,.98f),Cyan=new Color(.25f,.94f,1),Muted=new Color(.67f,.77f,.82f);
         StareMobileSession session;Canvas canvas;CanvasScaler scaler;Font regular,bold;Sprite rounded;
-        RectTransform voicePanel;Text voiceDetails;Button voiceRepair,voiceDone;
+        RectTransform voicePanel;Text voiceDetails,settingsVersion;Button voiceRepair,voiceDone;
         RectTransform avatarPanel,avatarFrame;RawImage avatarImage;Text avatarTitle,avatarName,avatarTagline,avatarIndex,avatarHint;
         Button avatarEntry,settingsAvatar,avatarPrevious,avatarNext,avatarUse,avatarCancel;StareMobileAvatarPreview avatarStudio;int avatarDraft;
         RectTransform leftEyeChip,rightEyeChip,trackingGrace,trackingGraceFill;Text leftEyeText,rightEyeText,eyeGuidance;
@@ -230,6 +230,8 @@ namespace Staredown
             settingsPanel=Box("Phone settings",safe,new Vector2(.5f,1),Vector2.zero,Vector2.one,new Vector2(.5f,1),Ink);
             settingsPanel.GetComponent<Image>().color=new Color(Ink.r,Ink.g,Ink.b,1);
             Label("Settings",settingsPanel,new Vector2(20,-18),new Vector2(300,40),30,Color.white,true);
+            settingsVersion=Label(StareAppVersion.Label,settingsPanel,new Vector2(20,-57),new Vector2(300,20),16,Muted);
+            settingsVersion.name="Installed app version";
             settingsDone=ButtonElement("Done",settingsPanel,Vector2.zero,new Vector2(96,50),()=>ShowSettings(false));
             musicLabel=Label("Music",settingsPanel,Vector2.zero,Vector2.one,24,Color.white,true);
             musicToggle=ButtonElement("Music on",settingsPanel,Vector2.zero,Vector2.one,()=>session.SetMusicEnabled(!session.MusicEnabled));
@@ -424,7 +426,7 @@ namespace Staredown
             homeStatusPanel.gameObject.SetActive(!string.IsNullOrEmpty(homeStatus.text));
             leave.gameObject.SetActive(false);editPlayerName.gameObject.SetActive(false);nameButtonLabel.text=session.PlayerName;
             roomLabel.text=string.IsNullOrEmpty(session.RoomCode)?"PRACTICE":"ROOM "+session.RoomCode;
-            roomStatus.text=lobby?state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots":state.livesMode&&local!=null?"Round "+state.round+" · "+(local.alive?local.lives+(local.lives==1?" life":" lives"):"Spectating"):"Round "+state.round+" · "+state.fighters.Count(f=>f.alive)+" remaining";
+            roomStatus.text=lobby?state.fighters.Count(f=>!f.bot)+" players · "+state.fighters.Count(f=>f.bot)+" bots":state.livesMode&&local!=null?"Round "+state.round+" · "+(local.alive?(local.lives>1?"Heart ready":"Last chance"):"Spectating"):"Round "+state.round+" · "+state.fighters.Count(f=>f.alive)+" remaining";
             fill.gameObject.SetActive(session.Hosting&&lobby);fill.interactable=!session.Busy;fillLabel.text=state.botFill?"Humans + bots":"Humans only";
             var mobileCamera=session.MobileCamera;bool running=mobileCamera!=null&&mobileCamera.Running;
             bool enabledIntent=mobileCamera!=null&&mobileCamera.CameraEnabledIntent,recovering=mobileCamera!=null&&mobileCamera.Recovering;
@@ -507,9 +509,9 @@ namespace Staredown
             if(state.livesMode)
             {
                 var pair=local.pair>=0&&local.pair<state.pairs.Length?state.pairs[local.pair]:null;
-                if(pair!=null&&pair.loser==local.id)return "Life lost · "+local.lives+" "+(local.lives==1?"life":"lives")+" left";
-                if(pair!=null&&pair.winner==local.id)return "Round won · "+local.lives+" "+(local.lives==1?"life":"lives")+" left";
-                return "Next opponent soon · "+local.lives+" "+(local.lives==1?"life":"lives");
+                if(pair!=null&&pair.loser==local.id)return "Heart used · you get one more chance";
+                if(pair!=null&&pair.winner==local.id)return "Round won · "+(local.lives>1?"heart ready":"last chance");
+                return "Next opponent soon · "+(local.lives>1?"heart ready":"last chance");
             }
             return "You advanced · next round soon";
         }
@@ -627,6 +629,7 @@ namespace Staredown
             float top=Mathf.Max(84,(height-panelHeight)*.5f);
             Place(settingsPanel,new Vector2(.5f,1),new Vector2(.5f,1),new Vector2(0,-top),new Vector2(panelWidth,panelHeight));
             PlaceButton(settingsDone,panelWidth-110,14,90,64,20);
+            Put(settingsVersion,new Vector2(20,-57),new Vector2(panelWidth-150,20),16);
             float inner=panelWidth-40;bool showBots=session.Connected&&session.Hosting&&session.State.phase==(int)MatchPhase.Lobby;
             if(tall)
             {

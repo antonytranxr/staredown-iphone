@@ -51,8 +51,8 @@ namespace Staredown
         }
         void PresentLifeToken(CreatureView avatar,Fighter fighter,ArenaState state)
         {
-            if(avatar.lifeToken==null)avatar.lifeToken=BuildLifeToken(avatar.root,"One life / 3D heart",.27f);
-            bool alive=fighter.alive&&fighter.lives>0;
+            if(avatar.lifeToken==null)avatar.lifeToken=BuildLifeToken(avatar.root,"Spare life / 3D heart",.27f);
+            bool alive=fighter.alive&&fighter.lives>1;
             if(avatar.lifeObserved&&avatar.lifeAlive&&!alive)avatar.lifeLostAt=state.clock;
             if(!avatar.lifeObserved)avatar.lifeLostAt=state.clock-2;
             avatar.lifeObserved=true;avatar.lifeAlive=alive;

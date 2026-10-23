@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-22",
+  "changes": [
+    "Installed app version and build number under Settings title on Quest and phone",
+    "One spare heart: first loss consumes protection, second loss eliminates, all room sizes",
+    "Stable host-assigned spawn positions with 2 m clearance; roster changes preserve existing placements",
+    "Large-room opponent selection bounded; small-room repeat-avoidance preserved"
+  ],
+  "checks": {
+    "spare_heart_and_spawn_rules": 1658,
+    "explicit_legacy_knockout_rules": 109,
+    "social_lobby": 27,
+    "progression": 228,
+    "mixed_botfilled_tournament": 34,
+    "mobile_ui": 157,
+    "arena_roster_and_heart_geometry": 108,
+    "protected_loser_stays_alive_with_spent_heart_hidden": true,
+    "local_transport_rejoin": 51,
+    "iOS_native_bridge_compiles_arm64_iOS15": true,
+    "native_metadata_harness_returns_build14": true,
+    "old_snapshot_spawn_fallback": true
+  },
+  "visual_review": [
+    "Quest Settings version line fits below heading",
+    "Phone version label fits portrait and landscape layouts"
+  ],
+  "versions": {
+    "quest": "1.20.1 (43)",
+    "iphone": "1.2.1 (14)"
+  },
+  "limitations": [
+    "No physical multi-headset spawn test this turn",
+    "No native iPhone install, archive or TestFlight upload this turn",
+    "Phone UI screenshots use Quest Editor metadata; installed phone reads its own bundle metadata",
+    "Quest APK built and inspected, not installed this turn; no headset detected"
+  ],
+  "builds": {
+    "quest": {
+      "result": "Succeeded",
+      "errors": 0,
+      "warnings": 6,
+      "bytes": 1947310767,
+      "duration": "00:03:03.3198770",
+      "path": "/Users/Antony/Documents/Codex/2026-10-01/x20-help-me-setup-astra-to/outputs/Staredown-Quest-2026-10-22-v1.20.1-02.apk"
+    },
+    "quest_apk": {
+      "package": "package: name='com.antony.staredown' versionCode='43' versionName='1.20.1' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'",
+      "bytes": 295938857,
+      "sha256": "155366444a1a060b0f440577f70a55547beeb000838196569c64f42486095bb2",
+      "quest_headtracking": true,
+      "openxr_native": true,
+      "meta_xr_native": true,
+      "phone_camera_bridge": false,
+      "apk_signature_v2_verified": true
+    },
+    "iphone": {
+      "version": "1.2.1",
+      "build": "14",
+      "camera_microphone_permissions": true,
+      "native_version_bridge_in_xcode_and_il2cpp": true,
+      "export": "Succeeded errors=0 warnings=3 duration=00:01:12.2737940",
+      "native_archive": false,
+      "testflight_uploaded": false
+    }
+  }
+}

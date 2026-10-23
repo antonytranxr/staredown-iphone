@@ -15,7 +15,7 @@ public static class StareRoomRejoinChecks
  public static async Task<string> Run(bool cloud=false)
  {
   int count=0;var host=new StareRelayNetwork();StareRelayNetwork client=null;
-  var ids=new HashSet<int>();var model=new Tournament(1);model.Add(0,"HOST");model.EnableBotFill();
+  var ids=new HashSet<int>();var model=new Tournament();model.Add(0,"HOST");model.EnableBotFill();
   string code=null;const ushort port=47819;
   try
   {

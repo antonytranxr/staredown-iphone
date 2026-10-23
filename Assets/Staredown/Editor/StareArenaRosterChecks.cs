@@ -10,9 +10,9 @@ public static class StareArenaRosterChecks
     static T Field<T>(StareVisuals view,string name)=>(T)typeof(StareVisuals).GetField(name,Private).GetValue(view);
     public static ArenaState Fixture()
     {
-        var state=new ArenaState{phase=(int)MatchPhase.Duel,round=2,clock=8,remaining=22,startingLives=1};
+        var state=new ArenaState{phase=(int)MatchPhase.Duel,round=2,clock=8,remaining=22,startingLives=2};
         string[] names={"ANT","KAI","MIDNIGHT KNIGHT","NOVA","OBSIDIAN","EMBER","FROST","MILO","VERDANT","COSMO","JUNO","ORBIT","LUNA","ATLAS","PIXEL","SAGE"};
-        state.fighters=Enumerable.Range(0,16).Select(i=>new Fighter{id=i,name=names[i],bot=i>=4,avatar=i%9,alive=i%4!=3,lives=i%4==3?0:1,ready=true,valid=true,pair=i/2,status=i%4==3?"ELIMINATED":"STARING",roundWins=i%2}).ToArray();
+        state.fighters=Enumerable.Range(0,16).Select(i=>new Fighter{id=i,name=names[i],bot=i>=4,avatar=i%9,alive=i%4!=3,lives=i%4==3?0:2,ready=true,valid=true,pair=i/2,status=i%4==3?"ELIMINATED":"STARING",roundWins=i%2}).ToArray();
         state.pairs=Enumerable.Range(0,8).Select(i=>new Pairing{a=i*2,b=i*2+1}).ToArray();return state;
     }
     public static string Run()

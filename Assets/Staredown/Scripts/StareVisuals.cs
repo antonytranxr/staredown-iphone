@@ -183,7 +183,7 @@ namespace Staredown
                 else if(local.pair<s.pairs.Length&&s.pairs[local.pair].winner>=0)
                 {
                     bool won=s.pairs[local.pair].winner==local.id;
-                    roundText.text=(won?"ROUND WON":"LIFE LOST")+(s.livesMode?" / "+local.lives+" "+(local.lives==1?"LIFE":"LIVES")+" LEFT":" / NEXT ROUND SOON");
+                    roundText.text=(won?"ROUND WON":"HEART USED")+(s.livesMode?(local.lives>1?" / HEART READY":" / LAST CHANCE"):" / NEXT ROUND SOON");
                 }
             }
             Fighter left=null,right=null;
@@ -192,7 +192,7 @@ namespace Staredown
             if(left!=null){portraitL.Set(left.left,left.right,left.yaw,left.pitch);boardLeft.text=left.DisplayName;boardLeft.color=left.bot?Gold:Cyan;}
             if(right!=null){portraitR.Set(right.left,right.right,right.yaw,right.pitch);boardRight.text=right.DisplayName;boardRight.color=right.bot?Gold:Cyan;}
             bool showEyes=StareScoreboard.ShowEyes(s);
-            if(!showEyes){boardLeft.text=StareScoreboard.ShowChampion(s)?"LAST WINNER":"ONE LIFE";boardRight.text=s.phase==(int)MatchPhase.Lobby?"EXPLORE & CHAT":"KEEP YOUR EYES OPEN";}
+            if(!showEyes){boardLeft.text=StareScoreboard.ShowChampion(s)?"LAST WINNER":"ONE SPARE HEART";boardRight.text=s.phase==(int)MatchPhase.Lobby?"EXPLORE & CHAT":"KEEP YOUR EYES OPEN";}
             boardLeft.gameObject.SetActive(showEyes);boardRight.gameObject.SetActive(showEyes);
             eyeMural?.SetFloat("_ArenaMode",showEyes?0:2);
             if(showEyes)UpdateEyeMural(left,right);

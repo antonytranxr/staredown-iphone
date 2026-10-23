@@ -10,7 +10,7 @@ public static class StareLivesChecks
     static void Check(bool value,string label){if(!value)throw new Exception("Lives/scoreboard: "+label);checks++;}
     static Tournament Room(int count,bool bots=false)
     {
-        var room=new Tournament();for(int i=0;i<count;i++){room.Add(i,"Player "+i,bots);if(!bots)room.Input(i,0,0,true,true,0,0,0);}
+        var room=new Tournament(1);for(int i=0;i<count;i++){room.Add(i,"Player "+i,bots);if(!bots)room.Input(i,0,0,true,true,0,0,0);}
         Check(room.Start(),count+" calibrated contestants start");return room;
     }
     static void Step(Tournament room,float duration,int missing=-1)
@@ -37,7 +37,7 @@ public static class StareLivesChecks
             var copy=JsonUtility.FromJson<ArenaState>(JsonUtility.ToJson(room.Snapshot()));Check(!copy.livesMode&&copy.startingLives==1&&copy.fighters.All(f=>f.lives==1),"single life travels in authoritative snapshot");
             Duel(room);var loser=room.Pairs[0].a;Lose(room,loser);Check(!room.Find(loser).alive&&room.Find(loser).lives==0,"first losing blink eliminates immediately");
         }
-        var filled=new Tournament();filled.Add(0,"Human");filled.EnableBotFill();filled.Input(0,0,0,true,true,0,0,0);Check(filled.Start()&&!filled.LivesMode&&filled.Fighters.Count==16,"bot-filled16 preserves knockout");
+        var filled=new Tournament(1);filled.Add(0,"Human");filled.EnableBotFill();filled.Input(0,0,0,true,true,0,0,0);Check(filled.Start()&&!filled.LivesMode&&filled.Fighters.Count==16,"bot-filled16 preserves knockout");
         var four=Room(4);Duel(four);foreach(var pair in four.Pairs)four.Blink(pair.a);Step(four,.125f);
         Check(four.Phase==MatchPhase.Intermission&&four.Fighters.Count(f=>f.alive)==2&&four.Fighters.Sum(f=>f.lives)==2,"four-player opening round eliminates both losers");
         Check(four.Pairs.All(p=>p.winner>=0&&p.loser>=0&&four.Find(p.winner).roundWins==1),"resolved results and score are authoritative");

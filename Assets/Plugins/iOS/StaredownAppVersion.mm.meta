@@ -1,0 +1,28 @@
+fileFormatVersion: 2
+guid: faddc2a022b44bdd9a79569f22f8f8d7
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 3
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
+  platformData:
+    Editor:
+      enabled: 0
+      settings:
+        DefaultValueInitialized: true
+    first:
+      enabled: 0
+      settings: {}
+    iOS:
+      enabled: 1
+      settings:
+        AddToEmbeddedBinaries: false
+        CompileFlags: -fobjc-arc
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
